@@ -68,8 +68,20 @@ FIDELITY_RECALL = 0.0264
 BAR_WIDTH = 12
 RULE = "─" * 52
 
-SUBGRAPHS_PATH = Path("data/instances/subgraphs.json")
-ENGINE_CACHE_PATH = Path("data/instances/engine_cache.json")
+def _data_path(name: str) -> Path:
+    """Prefer the working build, fall back to the shipped payload.
+
+    A judge's clean clone has only ``data/shipped/`` — ``data/instances/`` is a
+    local build artifact and is git-ignored. Reading the working copy first keeps
+    development honest (you see what you just rebuilt) while the fallback is what
+    makes the gate run at all from a fresh checkout.
+    """
+    working = Path("data/instances") / name
+    return working if working.exists() else Path("data/shipped") / name
+
+
+SUBGRAPHS_PATH = _data_path("subgraphs.json")
+ENGINE_CACHE_PATH = _data_path("engine_cache.json")
 CAPS_PATH = Path("docs/engine-capabilities.md")
 EVAL_PATH = Path("docs/evaluation.md")
 FIDELITY_PATH = Path("docs/fidelity.md")
