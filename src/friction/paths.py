@@ -23,6 +23,15 @@ Three engine facts, established by `friction.probe`, shape every query here:
   statement text.
 * `count(path)` is rejected ("unknown path projection count"), so the fan-in
   query yields the paths and counts the returned rows client-side.
+* `algo.SSpaths` (single-source, used by fan-in) does NOT share MSpaths' origin
+  spelling. It rejects the sourceLabel/sourceProperty/sourceValues SET with
+  "missing OpenCypher query parameter $sourceNode" and demands one INTEGER
+  `sourceNode`; a string is rejected with "sourceNode must be an integer node
+  id". Fan-in over a set of fix sites therefore issues one query per fix site
+  (sourceNode = that site's integer id) and unions the callers client-side.
+  Without a high `pathCount` SSpaths returns only the single shortest path, so
+  every fan-in would read as 1; the cap is set from Settings so all direct
+  callers come back.
 """
 
 from __future__ import annotations
@@ -95,11 +104,42 @@ def build_mspaths_cypher(caps: Capabilities, settings: Settings,
     )
 
 
+def _int_literal(value: int) -> str:
+    """Render one id as an integer Cypher literal, e.g. ``990001``.
+
+    algo.SSpaths' `sourceNode` must be a genuine INTEGER node id: a string
+    (`'990001'`) is rejected with "sourceNode must be an integer node id", and
+    the MSpaths-style sourceValues SET is rejected with "missing OpenCypher query
+    parameter $sourceNode". As with `_ids_literal`, only a validated non-bool int
+    is ever formatted into the query text, so there is no injection surface.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(
+            f"sourceNode must be a non-bool int, got {type(value).__name__}: {value!r}")
+    return str(value)
+
+
 def build_fan_in_cypher(caps: Capabilities, settings: Settings,
-                        fix_ids: Sequence[int]) -> str:
+                        source_id: int) -> str:
+    """One algo.SSpaths query for the direct incoming CALLS callers of ONE fix
+    site.
+
+    SSpaths takes a single integer `sourceNode`, NOT the sourceValues SET that
+    MSpaths accepts (see `friction.probe`'s `sspaths_source` probe), so fan-in
+    over a set of fix sites issues one query per site and unions the callers
+    client-side — `fan_in` does that. `maxLen: 1` restricts the result to direct
+    callers; `pathCount` is set high (from Settings) because SSpaths otherwise
+    returns a SINGLE shortest path, which would report every fan-in as 1.
+    """
+    if caps.sspaths_source_form != "sourceNode":
+        # Only the integer sourceNode form has ever parsed on this engine; a
+        # different probed value means the build changed underneath us, so fail
+        # loudly rather than emit a form measured to reject on every call.
+        raise ValueError(
+            f"unsupported SSpaths source form {caps.sspaths_source_form!r}; "
+            "only 'sourceNode' (integer) is implemented — re-probe the engine")
     config = ", ".join([
-        "sourceLabel: 'Function'", "sourceProperty: 'sid'",
-        f"sourceValues: {_ids_literal(fix_ids)}",
+        f"sourceNode: {_int_literal(source_id)}",
         "relTypes: ['CALLS']",
         f"relDirection: '{caps.rel_direction_incoming}'",
         "maxLen: 1", f"pathCount: {settings.fan_in_path_count}",
@@ -170,20 +210,45 @@ def fix_to_test_paths(transport, caps: Capabilities, settings: Settings,
 
 def fan_in(transport, caps: Capabilities, settings: Settings,
            fix_ids: list[int]) -> tuple[int, str, float, bool]:
+    """Number of DISTINCT functions that call into the fix-site set via CALLS.
+
+    algo.SSpaths is single-source (one integer `sourceNode` per call — see
+    `build_fan_in_cypher`), so one query is issued per fix site and the incoming
+    callers are unioned into a set here. The union is what makes the count
+    correct: a function that calls two different fix sites is ONE distinct
+    caller, so summing per-site row counts would over-report it — the set dedups
+    it to one. Fix-site sets are small (median 1-3), so the extra round trips are
+    cheap.
+
+    Each length-1 path SSpaths returns is `[sourceNode, caller]`; the caller is
+    the path node that is not the source. count(path) is rejected by this build,
+    so the rows are counted (here, after deduplication) rather than by the engine.
+    """
     if not fix_ids:
         return 0, "", 0.0, False
-    cypher = build_fan_in_cypher(caps, settings, fix_ids)
+
+    callers: set[int] = set()
+    statements: list[str] = []
+    truncated = False
     start = time.perf_counter()
-    # Ids are inlined in `cypher`; no params dict is passed (see build_*).
-    rows = transport.query(cypher)
+    for source_id in fix_ids:
+        cypher = build_fan_in_cypher(caps, settings, source_id)
+        statements.append(cypher)
+        # The id is inlined in `cypher`; no params dict is passed (see build_*).
+        rows = transport.query(cypher)
+        # The query caps this fix site's returned rows at settings.fan_in_path_count.
+        # A hub called by more functions than that is silently clipped, compressing
+        # exactly the high-friction tail this metric exists to detect, so any site
+        # hitting its cap is surfaced rather than swallowed (same bias direction as
+        # the pathCount truncation the fidelity guard catches).
+        if len(rows) >= settings.fan_in_path_count:
+            truncated = True
+        for row in rows:
+            for node_id in extract_node_ids(row.get("path")):
+                if node_id != source_id:
+                    callers.add(node_id)
     millis = (time.perf_counter() - start) * 1000.0
-    # count(path) is rejected by this build, so the returned paths are counted
-    # here rather than by the engine.
-    count = len(rows)
-    # The query caps returned rows at settings.fan_in_path_count. A hub function
-    # with more than that many incoming CALLS is silently clipped, compressing
-    # exactly the high-friction tail this metric exists to detect, so hitting the
-    # cap is surfaced rather than swallowed (same bias direction as the pathCount
-    # truncation the fidelity guard catches).
-    truncated = count >= settings.fan_in_path_count
-    return count, cypher, round(millis, 2), truncated
+    # One representative statement per fix site, joined so the run record shows
+    # exactly what executed; the returned count is the size of the deduped union.
+    cypher_repr = "\n".join(statements)
+    return len(callers), cypher_repr, round(millis, 2), truncated

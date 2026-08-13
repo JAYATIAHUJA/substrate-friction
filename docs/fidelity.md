@@ -1,26 +1,26 @@
 # Path fidelity vs a networkx reference
 
-Same edge set, same `maxLen`, same relationship types. Any shortfall is
-the engine's traversal or a result budget, not a different question.
+Two checks, both over the same maxLen and relationship types the engine used.
 
-- Instances compared: **43**
-- Paths returned by the engine: **0**
-- Paths found by the reference: **1090**
-- Recall (fraction of reference paths the engine returned): **0.0**
-- Instances missing at least one reference path: **18**
-- Largest single shortfall: `django__django-11276`
+## a. Engine vs reference on the SAME subgraph edge set
 
-Recall is measured by overlap: for each instance the engine's paths are
-intersected with the reference's paths. An engine that over-returns paths
-cannot inflate this number above 1.0, and returning the right *count* of
-wrong paths scores zero — so the `< 0.9` rule below cannot be defeated by
-over-return, only satisfied by actually returning the reference paths.
+This isolates the engine's `pathCount = 20` result cap: same graph, same question.
 
-The reference is undirected, matching an engine run with `relDirection=BOTH`,
-so any shortfall is truncation, not a direction mismatch.
+- Answered instances with a fully-enumerable reference: **22** (1 excluded — reference enumeration hit its cap)
+- Paths returned by the engine: **1021**
+- Paths found by the reference: **38720**
+- Overlap recall (reference paths the engine returned): **0.0264**
+- Validity precision (engine paths that are real reference paths): **1.0**
+- Largest single shortfall: `django__django-11740`
 
-Why this matters: F1 (path multiplicity) and F3 (intermediate spread) are
-counts of returned paths. Truncation does not add symmetric noise — it
-biases high-friction instances downward, which is the direction that would
-suppress the very signal this project tests for. If recall is below ~0.9,
-raise `pathCount` and re-run before believing any correlation result.
+Recall is overlap-based, bounded in [0, 1]; an engine that over-returns cannot inflate it. Precision 1.0 with recall far below 0.9 means the engine returns a correct but tiny subset of the true paths. Because the friction metric is built from path multiplicity, any correlation the engine result shows is truncation-dominated and must not be believed — this is the guard firing, exactly as designed.
+
+## b. Engine-on-subgraph vs reference on the FULL repo graph
+
+This quantifies what the subgraph node budget costs. The subgraphs are budget-limited BFS balls: **pct_untruncated = 0%** (0/50 completed all 6 hops).
+
+- Endpoint-bearing instances reachable within 6 hops in the FULL graph: **36**
+- Of those, engine returned a path (cohort): **16** → connectivity recall **0.4444**
+- Restricted to engine-answered instances: **16/16** → connectivity recall **1.0**
+
+When the engine query finishes, the budgeted subgraph preserved the short fix→test connections (answered connectivity recall is high). The truncation cost lands as the ~half of reachable instances the engine cannot answer at all (timeout/OOM), which drops cohort connectivity recall well below 1.0.

@@ -31,12 +31,18 @@ catch), so truncation is recorded in the stats and never hidden.
 
 Budgets
 -------
-The node/edge budgets come from ``docs/engine-scaling.md`` (the size-ceiling
-sweep against the live engine): ``<= 150`` nodes and ``<= 200`` traversed-relation
-edges per instance keep ``maxLen 6`` answerable. Those are exported here as
-``NODE_BUDGET`` / ``EDGE_BUDGET``. They are a ceiling with thin margin, not a
-target — the scaling doc found some hub-heavy neighbourhoods still time out even
-under budget, and those must be recorded as "no engine path", not forced under.
+The node/edge budgets come from ``docs/engine-scaling.md`` (the corrected
+size-ceiling sweep against the *healthy* live engine): ``<= 16_000`` nodes and
+``<= 24_000`` traversed-relation edges per instance (both-degree <= 3) keep
+``maxLen 6`` answerable in ~1.5 s cold — a ~20x margin under the 30 s timeout.
+Those are exported here as ``NODE_BUDGET`` / ``EDGE_BUDGET``.
+
+The earlier ``150`` / ``200`` ceiling this module once carried was an artifact of
+a *degraded object store* (SlateDB LocalFileSystem write failure, see the scaling
+doc's Finding 3), not a property of the engine, and is retracted. The generous
+budget is a ceiling, not a target: any genuinely hub-heavy neighbourhood that
+would still time out at ``maxLen 6`` is recorded as "no engine path", never forced
+under by lowering ``maxLen``.
 """
 
 from __future__ import annotations
@@ -52,9 +58,11 @@ from friction.parsing.calls import Edge
 # set. Callers filter to these before BFS.
 TRAVERSED_TYPES: tuple[str, ...] = ("CALLS", "HAS_METHOD", "INHERITS")
 
-# From docs/engine-scaling.md: the shipped-gate budget for maxLen 6.
-NODE_BUDGET = 150
-EDGE_BUDGET = 200
+# From docs/engine-scaling.md (corrected, healthy-store sweep): the generous
+# budget for maxLen 6 with a ~20x latency margin. Replaces the retracted
+# 150/200 ceiling that was measured against a degraded store.
+NODE_BUDGET = 16_000
+EDGE_BUDGET = 24_000
 
 
 def _undirected_adjacency(edges: Sequence[Edge]) -> dict[int, set[int]]:

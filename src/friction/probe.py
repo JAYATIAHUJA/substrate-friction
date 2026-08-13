@@ -39,6 +39,13 @@ class Capabilities:
     edge_loader_form: str
     http_params_supported: bool
     count_path_supported: bool
+    # How algo.SSpaths (the single-source procedure that fan-in uses) names its
+    # origin on this build. Measured, because the two `algo.*` procedures do NOT
+    # agree: MSpaths takes a sourceLabel/sourceProperty/sourceValues SET, but
+    # SSpaths rejects that with "missing OpenCypher query parameter $sourceNode"
+    # and instead demands a single INTEGER `sourceNode`. Defaulted so callers and
+    # fixtures built before this field existed still construct.
+    sspaths_source_form: str = "sourceNode"
 
 
 # Seed data every probe runs against. Ids are far above any real symbol id.
@@ -87,6 +94,41 @@ def _mspaths_int_stmt() -> str:
         "sourceValues: [990001], targetLabel: 'Probe', targetProperty: 'id', "
         "targetValues: [990003], relTypes: ['PCALLS'], maxLen: 3, "
         "pathCount: 5}) YIELD path RETURN path"
+    )
+
+
+def _sspaths_node_int_stmt() -> str:
+    """algo.SSpaths keyed on a single INTEGER `sourceNode` — the ONLY origin
+    form SSpaths accepts on this build. Node 990002 (b) has exactly one incoming
+    PCALLS edge (a->b), so incoming/maxLen 1 yields one path. Contrast MSpaths,
+    which takes a sourceValues SET; the two procedures do not share an origin
+    spelling, which is exactly why fan-in must be probed separately."""
+    return (
+        "CALL algo.SSpaths({sourceNode: 990002, relTypes: ['PCALLS'], "
+        "maxLen: 1, relDirection: 'incoming', pathCount: 500}) YIELD path RETURN path"
+    )
+
+
+def _sspaths_node_string_stmt() -> str:
+    """algo.SSpaths with a STRING `sourceNode` — rejected with "sourceNode must
+    be an integer node id". Kept so the id-type failure mode is documented and
+    cannot be mistaken for a missing key."""
+    return (
+        "CALL algo.SSpaths({sourceNode: '990002', relTypes: ['PCALLS'], "
+        "maxLen: 1, relDirection: 'incoming'}) YIELD path RETURN path"
+    )
+
+
+def _sspaths_values_stmt() -> str:
+    """algo.SSpaths driven by the MSpaths-style sourceLabel/sourceProperty/
+    sourceValues SET — rejected with "missing OpenCypher query parameter
+    $sourceNode". This is the exact form the fan-in query used to emit, and the
+    exact bug this probe now guards: SSpaths ignores the value set and demands a
+    scalar sourceNode instead."""
+    return (
+        "CALL algo.SSpaths({sourceLabel: 'Probe', sourceProperty: 'sid', "
+        "sourceValues: ['990002'], relTypes: ['PCALLS'], maxLen: 1, "
+        "relDirection: 'incoming', pathCount: 500}) YIELD path RETURN path"
     )
 
 
@@ -178,6 +220,13 @@ def run_all(transport, http_transport=None) -> list[ProbeResult]:
     results.append(_attempt(transport, "pairwise", _mspaths_string_stmt(pairwise=True)))
     # count(path) path projection — the fan-in aggregate shape.
     results.append(_attempt(transport, "count_path", _count_path_stmt()))
+    # algo.SSpaths ORIGIN form. SSpaths (single-source, the procedure fan-in uses)
+    # does not accept MSpaths' sourceValues set; it demands a scalar integer
+    # sourceNode. Probe all three shapes so the accepted one is measured, not
+    # assumed, and the two rejected ones are documented.
+    results.append(_attempt(transport, "sspaths_source:node_int", _sspaths_node_int_stmt()))
+    results.append(_attempt(transport, "sspaths_source:node_string", _sspaths_node_string_stmt()))
+    results.append(_attempt(transport, "sspaths_source:values", _sspaths_values_stmt()))
 
     for form, (cypher, params) in NODE_LOADER_FORMS.items():
         results.append(_attempt(transport, f"node_loader:{form}", cypher, params))
@@ -261,6 +310,20 @@ def derive(results: list[ProbeResult]) -> Capabilities:
     if edge_form is None:
         raise ProbeFailure("no UNWIND edge-loading form parsed")
 
+    # algo.SSpaths origin form. The integer-sourceNode form is the one that both
+    # parses and drives fan-in; the sourceValues set is a parse failure on this
+    # build. If neither parses, SSpaths — and therefore the whole fan-in metric —
+    # is dead, so surface it rather than emit a form that rejects on every call.
+    if _first_ok(results, "sspaths_source:node_int"):
+        sspaths_source_form = "sourceNode"
+    elif _first_ok(results, "sspaths_source:values"):
+        sspaths_source_form = "sourceValues"
+    else:
+        raise ProbeFailure(
+            "no algo.SSpaths origin form parsed; fan-in is unusable — inspect "
+            "docs/engine-capabilities.md and cypher-compat.md"
+        )
+
     return Capabilities(
         rel_direction_both=both,
         rel_direction_incoming=incoming,
@@ -270,6 +333,7 @@ def derive(results: list[ProbeResult]) -> Capabilities:
         edge_loader_form=edge_form,
         http_params_supported=any(r.name == "http_params" and r.ok for r in results),
         count_path_supported=any(r.name == "count_path" and r.ok for r in results),
+        sspaths_source_form=sspaths_source_form,
     )
 
 
