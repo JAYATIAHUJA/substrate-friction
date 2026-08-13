@@ -7,9 +7,14 @@ intersected against Function `line_start`/`line_end`.
 
 from __future__ import annotations
 
+import re
+
 from unidiff import PatchSet
 
 from friction.parsing.symbols import SymbolTable
+
+# Django test-runner identifier: 'method (dotted.module.Class[.method])'.
+_DJANGO_RE = re.compile(r"^(?P<method>[^()\s]+)\s*\((?P<inside>[^)]*)\)\s*$")
 
 
 def _normalise(path: str) -> str:
@@ -57,6 +62,57 @@ def fix_site_ids(patch: str, table: SymbolTable) -> list[int]:
     return sorted(hits)
 
 
+def parse_test_identifier(raw: str) -> tuple[str | None, str]:
+    """Split a FAIL_TO_PASS test identifier into (dotted_class_or_None, method).
+
+    Handles two shapes:
+      - pytest:  'path/to/test_x.py::Class::method'  and 'path::method'
+                 (with optional '[param]' suffix on the method)
+      - django:  'method (dotted.module.Class)'  and
+                 'method (dotted.module.Class.method)'  (method repeated)
+
+    The dotted class is returned WITHOUT the method appended and WITHOUT any
+    file-path component. The method is returned with any '[param]' stripped.
+    """
+    text = raw.strip()
+
+    # Django test-runner format takes precedence: it is the only one with parens.
+    m = _DJANGO_RE.match(text)
+    if m:
+        method = m.group("method").split("[")[0]
+        parts = [p for p in m.group("inside").strip().split(".") if p]
+        # Newer Django/unittest repeats the method name inside the parens.
+        if parts and parts[-1] == method:
+            parts = parts[:-1]
+        dotted = ".".join(parts) if parts else None
+        return dotted, method
+
+    # pytest node id.
+    if "::" in text:
+        comps = text.split("::")
+        method = comps[-1].split("[")[0]
+        # Drop the leading file-path component(s); keep only class parts.
+        middle = [c for c in comps[:-1] if not c.endswith(".py")]
+        dotted = ".".join(middle) if middle else None
+        return dotted, method
+
+    # Bare method name.
+    return None, text.split("[")[0]
+
+
+def _suffix_matches(full: str, table: SymbolTable) -> list[int]:
+    """Function ids whose qualname equals `full` or ends with `.full`.
+
+    parse_repo roots qualnames at the clone directory, so a Function.qualname
+    carries path-derived module prefixes that the django dotted name omits.
+    Matching on dot boundaries prevents 'Widget.render' from also matching
+    'FancyWidget.render'.
+    """
+    suffix = "." + full
+    return [f.id for f in table.functions
+            if f.qualname == full or f.qualname.endswith(suffix)]
+
+
 def test_target_ids(fail_to_pass: list[str], table: SymbolTable) -> list[int]:
     by_qual = {f.qualname: f.id for f in table.functions}
     by_name: dict[str, list[int]] = {}
@@ -65,13 +121,24 @@ def test_target_ids(fail_to_pass: list[str], table: SymbolTable) -> list[int]:
 
     hits: list[int] = []
     for raw in fail_to_pass:
-        node = raw.strip()
-        func = node.split("::")[-1].split("[")[0]
-        target = by_qual.get(func.replace("/", ".").replace(".py", ""))
+        dotted, method = parse_test_identifier(raw)
+        target: int | None = None
+
+        if dotted:
+            full = f"{dotted}.{method}"
+            # 1. exact qualname match, else unique dot-boundary suffix match.
+            target = by_qual.get(full)
+            if target is None:
+                matches = _suffix_matches(full, table)
+                if len(matches) == 1:
+                    target = matches[0]
+
         if target is None:
-            candidates = by_name.get(func, [])
+            # 2. unique bare method-name match; give up when ambiguous.
+            candidates = by_name.get(method, [])
             if len(candidates) == 1:
                 target = candidates[0]
+
         if target is not None and target not in hits:
             hits.append(target)
     return hits

@@ -14,6 +14,8 @@ import pytest
 from friction.build import (
     GRAPH_BASE,
     GRAPH_STRIDE,
+    _apply_command_sequence,
+    apply_test_patch,
     batched,
     choose_strategy,
     graph_name,
@@ -163,3 +165,123 @@ def test_offset_disjoint_bands_never_collide():
     a = offset_node_row({"id": 5, "sid": "5"}, instance_base(0))
     b = offset_node_row({"id": 5, "sid": "5"}, instance_base(1))
     assert a["id"] != b["id"]
+
+
+# --- test_patch application (pure: command selection + failure handling) ---
+
+_PATCH = "diff --git a/tests/t.py b/tests/t.py\n--- a/tests/t.py\n+++ b/tests/t.py\n"
+
+
+def test_apply_command_sequence_is_git_first_then_3way_then_patch():
+    cmds = _apply_command_sequence("/repo")
+    assert len(cmds) == 3
+    # Every command targets the given repo root.
+    assert all("/repo" in c for c in cmds)
+    # git apply (strict) is tried first.
+    assert cmds[0][:5] == ["git", "-C", "/repo", "apply", "--whitespace=nowarn"]
+    # git apply --3way is the second fallback.
+    assert "--3way" in cmds[1] and cmds[1][3] == "apply"
+    # patch -p1 is the last resort.
+    assert cmds[2][0] == "patch" and "-p1" in cmds[2]
+
+
+def test_apply_command_sequence_reads_patch_from_stdin():
+    cmds = _apply_command_sequence("/repo")
+    # The two git commands read the patch from stdin (trailing '-').
+    assert cmds[0][-1] == "-"
+    assert cmds[1][-1] == "-"
+
+
+def test_apply_test_patch_empty_returns_false_without_running():
+    calls = []
+
+    def runner(cmd, text):
+        calls.append(cmd)
+        return 0
+
+    assert apply_test_patch("/repo", "", runner=runner) is False
+    assert apply_test_patch("/repo", "   \n  ", runner=runner) is False
+    assert calls == []  # never invoked a command for a blank patch
+
+
+def test_apply_test_patch_first_command_succeeds_stops_early():
+    calls = []
+
+    def runner(cmd, text):
+        calls.append(cmd)
+        return 0  # first attempt succeeds
+
+    assert apply_test_patch("/repo", _PATCH, runner=runner) is True
+    assert len(calls) == 1  # did not try the fallbacks
+
+
+def test_apply_test_patch_falls_back_through_the_sequence():
+    calls = []
+
+    def runner(cmd, text):
+        calls.append(cmd)
+        # git apply fails, git apply --3way fails, patch -p1 succeeds.
+        return 0 if cmd[0] == "patch" else 1
+
+    assert apply_test_patch("/repo", _PATCH, runner=runner) is True
+    assert len(calls) == 3
+
+
+def test_apply_test_patch_all_commands_fail_returns_false():
+    calls = []
+
+    def runner(cmd, text):
+        calls.append(cmd)
+        return 1  # everything fails
+
+    assert apply_test_patch("/repo", _PATCH, runner=runner) is False
+    assert len(calls) == 3  # exhausted the whole sequence
+
+
+def test_apply_test_patch_feeds_patch_text_to_runner():
+    seen = []
+
+    def runner(cmd, text):
+        seen.append(text)
+        return 0
+
+    apply_test_patch("/repo", _PATCH, runner=runner)
+    assert seen == [_PATCH]
+
+
+# --- real-clone roundtrip (needs the django clone) ------------------------
+
+@pytest.mark.engine
+def test_apply_test_patch_roundtrip_on_real_clone(tmp_path):
+    """A real django test_patch applies cleanly and _restore fully reverts it.
+
+    Marked engine because it needs the on-disk django clone; it does not touch
+    the graph engine, but shares the "needs real repo state" precondition.
+    """
+    import subprocess
+    from pathlib import Path
+
+    from friction.build import _checkout, _restore, apply_test_patch
+    from friction.swebench import load_instances
+
+    repo_root = Path("data/repos/django")
+    if not (repo_root / ".git").exists():
+        pytest.skip("django clone not present")
+
+    inst = next(i for i in load_instances(repos=["django/django"]))
+    try:
+        _restore(repo_root)
+        _checkout(repo_root, inst.base_commit)
+        assert apply_test_patch(repo_root, inst.test_patch) is True
+        # The tree is now dirty (the test_patch touched tracked/new files).
+        dirty = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--porcelain"],
+            capture_output=True, text=True).stdout
+        assert dirty.strip() != ""
+    finally:
+        _restore(repo_root)
+
+    clean = subprocess.run(
+        ["git", "-C", str(repo_root), "status", "--porcelain"],
+        capture_output=True, text=True).stdout
+    assert clean.strip() == ""  # fully restored

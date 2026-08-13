@@ -61,9 +61,18 @@ from friction.probe import Capabilities
 
 # --- id namespacing -------------------------------------------------------
 # Bands start well above any residual low-id node left in ``default`` and are
-# spaced far wider than any single django graph (~33k nodes), so no two
+# spaced far wider than any single django graph (~35k nodes), so no two
 # instances' ids can collide.
-GRAPH_BASE = 100_000_000
+#
+# The engine cannot delete the graphs already resident in ``default``
+# (DETACH DELETE on a django-scale graph exceeds the 29999 ms query timeout),
+# so a rebuild cannot reuse the old id region. This base sits far above the
+# first build's occupied span (100_000_000 .. ~590_035_442), giving every
+# rebuilt instance a fresh, disjoint band: instance i occupies
+# [2_000_000_000 + i*10_000_000, +~35k]. With 50 instances the top band is
+# 2_490_000_000 .. ~2_490_035_442 -- ~1.4e9 clear of the old region's top and,
+# at ~35k nodes per graph vs a 10_000_000 stride, no band can reach the next.
+GRAPH_BASE = 2_000_000_000
 GRAPH_STRIDE = 10_000_000
 
 
@@ -169,11 +178,76 @@ def _rewrite_offset(out_dir: Path, base: int) -> None:
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+# --- test-patch application -----------------------------------------------
+# SWE-bench evaluates a fix by applying the instance's ``test_patch`` and
+# running FAIL_TO_PASS. Those test functions therefore belong in the graph --
+# they are exactly "the tests that validate the fix", which the friction metric
+# measures paths *to*. But the graph is (correctly) built at bare
+# ``base_commit``, the tree where those newly-introduced tests do not yet exist,
+# so at base_commit they are unreachable by construction. Applying the
+# ``test_patch`` to the working tree before parsing makes them exist.
+#
+# This does not move fix-site line numbers: in SWE-bench the gold patch touches
+# source files and the test_patch touches test files, and across all 231 django
+# instances the two file sets are disjoint (0 overlap, verified), so applying
+# only the test_patch cannot shift a line in any file the gold patch edits.
+
+
+def _apply_command_sequence(repo_root: Path) -> list[list[str]]:
+    """Ordered commands tried to apply a test patch (patch read from stdin).
+
+    ``git apply`` is atomic (it either applies cleanly or touches nothing), so a
+    failed first attempt leaves the tree untouched for the next. ``--3way`` can
+    fall back on blob context when a strict apply fails; ``patch -p1`` is the
+    last resort for patches git rejects for whitespace/fuzz reasons.
+    """
+    r = str(repo_root)
+    return [
+        ["git", "-C", r, "apply", "--whitespace=nowarn", "-"],
+        ["git", "-C", r, "apply", "--3way", "--whitespace=nowarn", "-"],
+        ["patch", "-p1", "-d", r, "--force"],
+    ]
+
+
+def _run_apply(cmd: list[str], patch_text: str) -> int:
+    """Run one apply command, feeding ``patch_text`` on stdin; return exit code."""
+    proc = subprocess.run(cmd, input=patch_text, text=True,
+                          capture_output=True)
+    return proc.returncode
+
+
+def apply_test_patch(repo_root: Path, test_patch: str, runner=_run_apply) -> bool:
+    """Apply an instance's test_patch to the working tree at ``repo_root``.
+
+    Tries ``git apply``, then ``git apply --3way``, then ``patch -p1`` in order,
+    stopping at the first command that exits 0. Returns ``True`` if any
+    succeeded, ``False`` otherwise (including an empty/blank patch). ``runner``
+    is injectable so the command-selection and failure-handling logic can be
+    unit-tested without a real clone.
+    """
+    if not test_patch or not test_patch.strip():
+        return False
+    for cmd in _apply_command_sequence(Path(repo_root)):
+        if runner(cmd, test_patch) == 0:
+            return True
+    return False
+
+
 # --- engine build ---------------------------------------------------------
 
 def _checkout(repo_root: Path, base_commit: str) -> None:
     subprocess.run(["git", "-C", str(repo_root), "checkout", "-q", base_commit],
                    check=True)
+
+
+def _restore(repo_root: Path) -> None:
+    """Return the clone to a clean tree: discard tracked edits and untracked
+    files (e.g. a partially-applied patch or ``.rej`` / ``.orig`` residue) so
+    the next instance starts from a pristine base_commit. Scoped to the clone.
+    """
+    r = str(repo_root)
+    subprocess.run(["git", "-C", r, "checkout", "-q", "--", "."], check=False)
+    subprocess.run(["git", "-C", r, "clean", "-fdq"], check=False)
 
 
 def build_instance_graph(instance, repo_root: Path, transport, caps: Capabilities,
@@ -196,20 +270,37 @@ def build_instance_graph(instance, repo_root: Path, transport, caps: Capabilitie
     timings: dict[str, float] = {}
 
     t = time.perf_counter()
+    # Start from a pristine tree, then pin to this instance's base_commit.
+    _restore(repo_root)
     _checkout(repo_root, instance.base_commit)
     timings["checkout"] = time.perf_counter() - t
 
+    # Apply the instance's test_patch so its FAIL_TO_PASS tests exist in the
+    # tree being parsed. On failure, discard any partial application and parse
+    # the unpatched tree rather than aborting the whole build -- but record it.
     t = time.perf_counter()
-    table = parse_repo(repo_root, repo_code)
-    timings["parse"] = time.perf_counter() - t
+    test_patch = getattr(instance, "test_patch", "") or ""
+    test_patch_applied = apply_test_patch(repo_root, test_patch)
+    if not test_patch_applied and test_patch.strip():
+        _restore(repo_root)
+        _checkout(repo_root, instance.base_commit)
+    timings["test_patch"] = time.perf_counter() - t
 
-    t = time.perf_counter()
-    edges = resolve(repo_root, table)
-    timings["resolve"] = time.perf_counter() - t
+    try:
+        t = time.perf_counter()
+        table = parse_repo(repo_root, repo_code)
+        timings["parse"] = time.perf_counter() - t
 
-    t = time.perf_counter()
-    covers = derive_covers(table, edges)
-    timings["covers"] = time.perf_counter() - t
+        t = time.perf_counter()
+        edges = resolve(repo_root, table)
+        timings["resolve"] = time.perf_counter() - t
+
+        t = time.perf_counter()
+        covers = derive_covers(table, edges)
+        timings["covers"] = time.perf_counter() - t
+    finally:
+        # Always leave the clone clean for the next instance, even on error.
+        _restore(repo_root)
 
     # Fix sites and test targets are computed against THIS base_commit's tree.
     fix_ids = [i + base for i in fix_site_ids(instance.patch, table)]
@@ -238,6 +329,7 @@ def build_instance_graph(instance, repo_root: Path, transport, caps: Capabilitie
         "nodes": n_nodes,
         "edges": n_edges,
         "counts": dict(counts),
+        "test_patch_applied": test_patch_applied,
         "fix_site_ids": fix_ids,
         "test_target_ids": test_ids,
         "seconds": round(sum(timings.values()), 3),
@@ -283,6 +375,7 @@ def _write_manifest(manifest_path: Path, records: list[dict]) -> None:
             "id_range": r["id_range"],
             "nodes": r["nodes"],
             "edges": r["edges"],
+            "test_patch_applied": r.get("test_patch_applied", None),
             "fix_site_ids": r["fix_site_ids"],
             "test_target_ids": r["test_target_ids"],
             "seconds": r["seconds"],
