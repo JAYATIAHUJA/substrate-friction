@@ -47,6 +47,13 @@ as a *defect report*.
   the generator receives `out_degree = both_degree / 2`. Real django's traversed
   relation types (`CALLS`+`HAS_METHOD`+`INHERITS`) give both-degree ≈ **2.9**, so
   both-degree 3 is the realistic operating point and 2 / 4 bracket it.
+  **Stated unambiguously: "both-degree N" is the undirected (in + out) degree of
+  the resulting graph. It means `N/2` outgoing edges per node, i.e. ≈ `(N/2)·n`
+  directed edges total** — so both-degree 3 is `1.5·n` edges, which is why the
+  Finding 1 both-degree-3 rows read 746 / 2 999 / 11 998 / 23 999 / 50 998 edges
+  at 500 / 2 000 / 8 000 / 16 000 / 34 000 nodes (≈ 1.5×). It is **not** 3 out-edges
+  per node; a sweep that counts degree as out-edges-per-node would put twice as
+  many edges in the "3" column (see the reconciliation note below).
 * **Seed placement.** 3 source + 3 target ids are drawn from the graph interior
   with a fixed per-config RNG (not the degenerate node 0 → node n−1 corner), so
   each cell reflects a representative mid-graph placement rather than a lucky or
@@ -127,6 +134,52 @@ band (Method); `rows` is the number of paths returned at maxLen 6.
 Nothing timed out on a cold run anywhere in the sweep. The worst cold cell is
 34 000 / bd 3 / maxLen 6 = **27.6 s**, still under the 30 s ceiling but with no
 margin.
+
+### Reconciliation with an independent sweep (degree-definition mismatch)
+
+An independent sweep was run directly against the same healthy engine and, at
+maxLen 6, reported:
+
+| nodes | edges | maxLen 6 (independent) |
+|------:|------:|----------------------:|
+|    500 |     1 000 |    101 ms |
+|  2 000 |     5 997 |    477 ms |
+|  8 000 |    23 998 |  1 924 ms |
+| 34 000 |   101 995 |  7 511 ms |
+
+At first glance this contradicts Finding 1: at the same node count the edge
+counts are **~2× larger** (2 000 → 5 997 vs 2 999; 8 000 → 23 998 vs 11 998;
+34 000 → 101 995 vs 50 998 — each **exactly 2.0×**). That factor of two is not a
+disagreement about the engine; it is a disagreement about the word "degree".
+
+* **Finding 1 (this doc)** labels rows by **both-degree** = undirected (in + out)
+  degree, so "both-degree 3" is `out_degree = 1.5`, `edges ≈ 1.5·n`.
+* **The independent sweep** labels rows by **out-edges-per-node** (`degree = out_degree`),
+  so its "degree 3" is `edges ≈ 3·n`.
+
+`3·n ÷ 1.5·n = 2.0`, which is precisely the observed edge-count ratio at every
+matched node count. Once the definitions are aligned the edge counts reconcile
+exactly: the independent "degree 3" rows are the same density as a **both-degree 6**
+graph in this doc's convention (denser than the both-degree-4 column here), and
+its 500-node row (1 000 edges = `2·n`) is a both-degree-4 point.
+
+**On latency the two sweeps corroborate the structural finding but are not
+millisecond-comparable, and neither is privileged.** Compared at matched *total*
+edge count they agree to within a small factor in the mid-range — the
+independent 8 000 / 23 998 → 1 924 ms sits beside this doc's 16 000 / 23 999
+(both-degree 3) → 1 458 ms, same ~24 000 edges, same order of magnitude. At
+34 000 nodes they diverge in the other direction: the independent 34 000 / 101 995
+→ 7 511 ms is **faster** than this doc's denser-yet 34 000 / 67 998 (17 823 ms)
+and much faster than 34 000 / 50 998 (27 620 ms), despite carrying more edges.
+That is the seed-placement variance Finding 2 documents (a 1–2 order-of-magnitude
+swing from fix/test placement at large `n`): the two sweeps drew different
+interior seeds, so absolute cold ms differ even at equal density. The honest
+reading is that the two measurement sets **agree on the definitional facts (the 2×
+is a pure degree-convention artifact) and on the structural conclusion (density
+and maxLen drive cost; node count is a weak, saturating lever), but do not agree
+to the millisecond** — and the divergence is placement, not a contradiction about
+the engine. Both are reported here with their provenance rather than picking the
+lower or the higher number.
 
 ## Finding 2 — the binding constraint
 
@@ -260,11 +313,41 @@ Supporting notes:
 
 ## Reproduce
 
-Harness in the session scratchpad: `scaling.py` (generator + inlined-literal
-query builder + timer), `sweep_healthy.py` (this sweep: node × both-degree ×
-maxLen, cold + warm, fresh bands above `7_100_000_000`). Results JSON:
-`sweep_healthy_results.json`. Every query is the real friction shape
-(`algo.MSpaths`, `pairwise: true`, `relDirection: 'both'`, `pathCount: 20`) with
-inlined string `sourceValues`/`targetValues`; every graph is a fresh disjoint id
-band. Measured against `bolt://127.0.0.1:7687`, engine commit
+Committed, runnable harness: **`scripts/engine_scaling_sweep.py`**. With the
+engine up (`./setup.sh`, or `just up`), from the repo root:
+
+```bash
+# Full sweep: node × both-degree × maxLen, cold + warm, fresh bands above
+# 7_100_000_000. Writes docs/plots/engine_scaling_sweep_results.json and prints
+# the markdown tables to stdout.
+uv run python scripts/engine_scaling_sweep.py
+
+# Fast liveness check (one small cell, ~seconds):
+uv run python scripts/engine_scaling_sweep.py --smoke
+
+# A single row/column subset:
+uv run python scripts/engine_scaling_sweep.py --nodes 500,2000 \
+    --both-degrees 3 --max-lens 4,5,6
+```
+
+Every query the script issues is the real friction shape — `algo.MSpaths`,
+`pairwise: true`, `relDirection: 'both'`, `pathCount: 20`, with `sourceValues`/
+`targetValues` inlined as Cypher string literals against the `sid` property
+(built by `friction.paths.build_mspaths_cypher`, the same builder the gate uses).
+Each `(node-count, both-degree)` graph is seeded into its own fresh disjoint id
+band `7_100_000_000 + i × 50_000_000`; `gen_call_graph(n, out_degree, seed)` uses
+`out_degree = both_degree / 2` (see the degree convention in Method). Measured
+against `bolt://127.0.0.1:7687`, engine commit
 `02a40025d2d57e97ab2754c8256219cdbfeab379`.
+
+**Provenance of the table in Finding 1.** Those numbers were produced by an
+**earlier, equivalent** harness (`scaling.py` + `sweep_healthy.py`) that lived in
+the build session's scratchpad and was never committed — which is exactly the gap
+this script closes. `scripts/engine_scaling_sweep.py` is a faithful
+re-implementation of that harness (same generator contract, same degree
+convention, same id-band placement, same inlined-literal `MSpaths` query), so
+re-running it reproduces the same table *shape*. The individual milliseconds will
+not match to the digit on a fresh run: cost is dominated by interior seed
+placement, which this document measures as a 1–2 order-of-magnitude swing at large
+`n` (Finding 2). The committed table is the earlier harness's run; this script is
+the reproduction path, not a byte-for-byte replay of it.

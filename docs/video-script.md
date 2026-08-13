@@ -19,12 +19,12 @@ live query and pauses. Per-section word counts are in the last column.
 |---|---|---|---|
 | 0:00–0:25 | [STILL] Title card: "Substrate Friction — should an agent even take this ticket?" Hold on the title, no motion. | "Everyone is trying to make coding agents smarter. We asked the cheaper question: which tickets should we *not* give them at all? We built a gate that scores a ticket before an agent touches it — and then we did the thing most demos skip. We checked whether our own answer was real." | 58 |
 | 0:25–0:45 | [LIVE] Terminal, clean prompt. Type and run `friction check --issue django__django-10880`. Do not wait for output yet — start talking over the spinner. | "It runs on self-hosted, open-source HydraDB — one Bolt endpoint, one command. It turns the fix, the test, and the call graph between them into a friction score. Higher friction, more tangled the path from the change to the thing that proves it." | 45 |
-| 0:45–1:20 | [LIVE] Output resolves: six-component breakdown, HIGH band, "route to a human engineer", the Cypher, the measured latency, and the on-screen note that the path-count cap was reached. Let it sit for two seconds. Then run `friction fidelity`. [STILL] cut to `docs/plots/truncation.png` as you say "collapses". | "The gate is confident: HIGH friction, route this one to a human. On the engine's own numbers this metric scores AUC 0.780, p 0.04. Looks like a win. Now watch. `friction fidelity`. On this exact instance the engine returned twenty paths — because it caps at twenty. Full enumeration over the *identical* edges finds thirty-eight thousand seven hundred twenty. It saw two-point-six percent. Remove only that cap and the AUC collapses to 0.565, p 0.73. Our tool was confidently wrong — and this is how we caught it." | 96 |
+| 0:45–1:20 | [LIVE] Output resolves: six-component breakdown, HIGH band, "route to a human engineer", the Cypher, the measured latency, and the on-screen note that the path-count cap was reached. Let it sit for two seconds. Then run `friction fidelity`. [STILL] cut to `docs/plots/truncation.png` as you say "collapses". | "The gate is confident: HIGH friction, route this one to a human. On the engine's own numbers this metric scores AUC 0.780, p 0.04. Looks like a win. Now watch. `friction fidelity`. On this exact instance the engine returned twenty paths — because it caps at twenty. Full enumeration over the *identical* edges finds thirty-eight thousand seven hundred twenty. It saw two-point-six percent. Remove that cap — same instances, same edges — and the AUC collapses to 0.576, p 0.59; the all-forty-three headline is 0.565, a clean null. Our tool was confidently wrong — and this is how we caught it." | 97 |
 | 1:20–1:50 | [STILL] `docs/plots/correlation.png` — the flat scatter with the null r. Then a plain text overlay listing the three confound rows. | "So the honest result is a null. Forty-three endpoint-bearing instances, ground truth from three published agent systems. We ran the confound checks: friction is not repo size, correlation minus 0.11. It is not patch size. And patch size on its own predicts failure *better* than friction does — 0.640 against our 0.565. We report the number that lost." | 62 |
 | 1:50–2:30 | [LIVE] Split view: the `algo.MSpaths` query text (from the gate output) on the left, the measured milliseconds on the right. [B-ROLL] optional: `docs/plots/pair.png`. | "Why HydraDB. Friction is a many-to-many path computation — every fix site against every test target. HydraDB's `algo.MSpaths` with pairwise true does all of them in one server-side round trip; without it that is twenty-one separate queries per ticket. It is real Cypher and real latency: median fourteen-point-six seconds at max-length six. And it is honest — the engine only answered 23 of the 43 at that depth; the other twenty timed out or ran the memory pool dry. We report those too." | 90 |
 | 2:30–3:00 | [STILL] `docs/engine-scaling.md` retraction paragraph highlighted, then the repo URL on a clean card. Hold the URL for the final three seconds. | "One more thing we found *for* the engine. Its documented local config degrades to permanent write failure after about six gigabytes — but reads keep serving, so the node looks healthy. That defect fooled an earlier version of this project into a fake ceiling; the retraction is in the repo. Pinned engine commit, MIT license, one setup script. The null is the finding. Thanks for watching." | 66 |
 
-Section totals: 58 · 45 · 96 · 62 · 90 · 66 = **417 words** ≈ **2:47** spoken.
+Section totals: 58 · 45 · 97 · 62 · 90 · 66 = **418 words** ≈ **2:47** spoken.
 
 ---
 
@@ -112,12 +112,12 @@ friction fidelity    # expect: recall 0.0264, 1021 of 38720 paths
 ls README* 2>/dev/null || echo "MISSING: no README in repo root"
 ```
 
-- [ ] **OPEN ITEM — no `README.md` exists in the repo root yet.** The checklist requires a
-      "How HydraDB is used" section naming the specific primitives (`algo.MSpaths`
-      pairwise:true, `algo.SSpaths` integer sourceNode / relDirection incoming / maxLen 1,
-      `UNWIND $rows` batched Bolt loading, mandatory `maxLen` bound) and stating what breaks
-      without them (21 round trips per ticket; no fan-in; HTTP cannot pass `$params`). This
-      must be written before submission. Flagging, not silently passing.
+- [x] **`README.md` exists in the repo root and is committed**, with a "How HydraDB is used"
+      section naming the specific primitives (`algo.MSpaths` pairwise:true, `algo.SSpaths`
+      integer sourceNode / relDirection incoming / maxLen 1, `UNWIND $rows` batched Bolt
+      loading, mandatory `maxLen` bound) and stating what breaks without them (21 round trips
+      per ticket; no fan-in; HTTP cannot pass `$params`) and why a vector index structurally
+      cannot do the job. Section (a)/(b)/(c) under "How HydraDB is used".
 
 ### 5. Video and links
 
@@ -136,8 +136,14 @@ ls README* 2>/dev/null || echo "MISSING: no README in repo root"
 
 ## Open items before this checklist is fully green
 
-1. **No `README.md`** with the "How HydraDB is used" section (item 4) — must be authored.
-2. **`setup.sh` not yet run on a second machine** (item 2) — must be clean-clone tested.
-3. **Repo not confirmed public** from a logged-out session (item 1) — verify in incognito.
+1. **`setup.sh` not yet run on a second machine** (item 2) — must be clean-clone tested.
+2. **Repo not confirmed public** from a logged-out session (item 1) — verify in incognito.
+3. **Video not yet recorded** (item 5) — record it, confirm it is under 3:00 and plays
+   without login in a fresh incognito window.
+4. **Submission form not yet completed** (item 6) — submit before the deadline and
+   screenshot the confirmation.
 
-Everything else in the checklist is verified against the current repo state.
+`README.md` now exists at the repo root (item 4, done). Everything else in the checklist is
+verified against the current repo state; the remaining open items are the video, the
+submission, and the two things that can only be checked from outside this repo (a clean
+clone on another machine and a logged-out public-visibility check).
