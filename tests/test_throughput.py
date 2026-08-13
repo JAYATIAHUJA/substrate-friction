@@ -1,7 +1,16 @@
 from friction import throughput
 from friction.probe import Capabilities
 
-CAPS = Capabilities("both", "incoming", False, "create_inline", "merge_then_create", True)
+CAPS = Capabilities(
+    rel_direction_both="both",
+    rel_direction_incoming="incoming",
+    pairwise_supported=False,
+    sourceValues_type="string",
+    node_loader_form="create_inline",
+    edge_loader_form="merge_then_create",
+    http_params_supported=True,
+    count_path_supported=False,
+)
 
 
 class CountingTransport:

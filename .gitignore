@@ -12,3 +12,4 @@ minio-data/
 secrets/
 .venv/
 .superpowers/
+data/repos/

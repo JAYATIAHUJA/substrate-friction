@@ -34,16 +34,23 @@ class Capabilities:
     rel_direction_both: str
     rel_direction_incoming: str
     pairwise_supported: bool
+    sourceValues_type: str
     node_loader_form: str
     edge_loader_form: str
     http_params_supported: bool
+    count_path_supported: bool
 
 
 # Seed data every probe runs against. Ids are far above any real symbol id.
+# Every node carries a STRING `sid` mirror of its integer id: algo.* set queries
+# (MSpaths) match sourceValues/targetValues against a STRING property only —
+# `sourceValues: [990001]` against the int `id` prop parses but matches nothing,
+# and a bare integer list is rejected outright with "sourceValues must be a list
+# of strings". `sid` is the property those queries actually match against.
 SEED = [
-    "CREATE (a:Probe {id: 990001, name: 'a'})",
-    "CREATE (b:Probe {id: 990002, name: 'b'})",
-    "CREATE (c:Probe {id: 990003, name: 'c'})",
+    "CREATE (a:Probe {id: 990001, sid: '990001', name: 'a'})",
+    "CREATE (b:Probe {id: 990002, sid: '990002', name: 'b'})",
+    "CREATE (c:Probe {id: 990003, sid: '990003', name: 'c'})",
     "MATCH (a {id: 990001}) MATCH (b {id: 990002}) CREATE (a)-[:PCALLS]->(b)",
     "MATCH (b {id: 990002}) MATCH (c {id: 990003}) CREATE (b)-[:PCALLS]->(c)",
 ]
@@ -56,16 +63,25 @@ def _direction_stmt(value: str) -> str:
     )
 
 
-def _pairwise_stmt() -> str:
+def _mspaths_string_stmt(pairwise: bool) -> str:
+    """MSpaths keyed on the STRING `sid` property with STRING sourceValues — the
+    only form that both parses and matches nodes. `pairwise` toggles ONLY the
+    pairwise key, so the pairwise probe differs from the sourceValues_type:string
+    probe by exactly that one key and can never be confounded with a type error."""
+    pw = "pairwise: true, " if pairwise else ""
     return (
-        "CALL algo.MSpaths({sourceLabel: 'Probe', sourceProperty: 'id', "
-        "sourceValues: [990001], targetLabel: 'Probe', targetProperty: 'id', "
-        "targetValues: [990003], relTypes: ['PCALLS'], maxLen: 3, "
-        "pairwise: true, pathCount: 5}) YIELD path RETURN path"
+        "CALL algo.MSpaths({sourceLabel: 'Probe', sourceProperty: 'sid', "
+        "sourceValues: ['990001'], targetLabel: 'Probe', targetProperty: 'sid', "
+        "targetValues: ['990003'], relTypes: ['PCALLS'], maxLen: 3, "
+        f"{pw}pathCount: 5}}) YIELD path RETURN path"
     )
 
 
-def _mspaths_baseline_stmt() -> str:
+def _mspaths_int_stmt() -> str:
+    """MSpaths with an INTEGER sourceValues list — rejected outright with
+    "sourceValues must be a list of strings". Kept as a probe so the type
+    failure mode is documented and can never again be mistaken for a missing
+    `pairwise` key."""
     return (
         "CALL algo.MSpaths({sourceLabel: 'Probe', sourceProperty: 'id', "
         "sourceValues: [990001], targetLabel: 'Probe', targetProperty: 'id', "
@@ -74,17 +90,35 @@ def _mspaths_baseline_stmt() -> str:
     )
 
 
+def _count_path_stmt() -> str:
+    """The fan-in query shape the brief assumed: aggregate the yielded paths with
+    `count(path)`. Rejected with "unknown path projection count" — callers must
+    yield the paths and count them client-side instead."""
+    return (
+        "CALL algo.SSpaths({sourceNode: 990001, relTypes: ['PCALLS'], "
+        "maxLen: 3, relDirection: 'both'}) YIELD path RETURN count(path) AS fan_in"
+    )
+
+
 NODE_LOADER_FORMS = {
+    # Kept as a probe: documents that inline CREATE with an embedded label +
+    # multiple properties is rejected ("UNWIND batch supports one-hop
+    # relationships only" / not a legal vertex upsert).
     "create_inline": (
         "UNWIND $rows AS row CREATE (n:ProbeLoad {id: row.id, name: row.name})",
         {"rows": [{"id": 990101, "name": "x"}, {"id": 990102, "name": "y"}]},
     ),
-    # Global constraints: "Vertex upsert must be MERGE by id followed by SET —
-    # folding extra properties into the MERGE pattern is rejected." The label
-    # therefore cannot live in the MERGE pattern; it is applied with SET.
+    # Kept as a probe: documents that folding the label into the MERGE pattern is
+    # rejected ("MERGE pattern matches only id; apply labels with SET").
     "merge_then_set": (
-        "UNWIND $rows AS row MERGE (n {id: row.id}) SET n:ProbeLoad, n.name = row.name",
+        "UNWIND $rows AS row MERGE (n:ProbeLoad {id: row.id}) SET n.name = row.name",
         {"rows": [{"id": 990103, "name": "x"}, {"id": 990104, "name": "y"}]},
+    ),
+    # The form that actually parses: MERGE by id, then apply exactly one label
+    # and the properties via SET.
+    "merge_set_label": (
+        "UNWIND $rows AS row MERGE (n {id: row.id}) SET n:ProbeLoad, n.prop = row.prop",
+        {"rows": [{"id": 990110, "prop": "x"}, {"id": 990111, "prop": "y"}]},
     ),
 }
 
@@ -135,8 +169,15 @@ def run_all(transport, http_transport=None) -> list[ProbeResult]:
     for value in ("incoming", "INCOMING", "in", "IN"):
         results.append(_attempt(transport, f"rel_direction:{value}", _direction_stmt(value)))
 
-    results.append(_attempt(transport, "mspaths_baseline", _mspaths_baseline_stmt()))
-    results.append(_attempt(transport, "pairwise", _pairwise_stmt()))
+    # sourceValues TYPE, isolated from the pairwise key. The int form is
+    # rejected for its value type; the string form parses and matches nodes.
+    results.append(_attempt(transport, "sourceValues_type:int", _mspaths_int_stmt()))
+    results.append(_attempt(transport, "sourceValues_type:string", _mspaths_string_stmt(pairwise=False)))
+    # pairwise KEY. Identical to sourceValues_type:string except `pairwise: true`,
+    # so a failure here can only mean the pairwise key, never the value type.
+    results.append(_attempt(transport, "pairwise", _mspaths_string_stmt(pairwise=True)))
+    # count(path) path projection — the fan-in aggregate shape.
+    results.append(_attempt(transport, "count_path", _count_path_stmt()))
 
     for form, (cypher, params) in NODE_LOADER_FORMS.items():
         results.append(_attempt(transport, f"node_loader:{form}", cypher, params))
@@ -189,6 +230,21 @@ def derive(results: list[ProbeResult]) -> Capabilities:
             "literal — inspect docs/engine-capabilities.md and cypher-compat.md"
         )
 
+    # sourceValues TYPE for algo.* set queries. Prefer the string form, since
+    # it is the one that both parses and matches nodes; fall back to int only if
+    # somehow that is the accepted type. If neither parses, MSpaths is unusable
+    # and every set-to-set query is dead — surface it rather than emit a value
+    # that would silently match nothing downstream.
+    if _first_ok(results, "sourceValues_type:string"):
+        source_values_type = "string"
+    elif _first_ok(results, "sourceValues_type:int"):
+        source_values_type = "int"
+    else:
+        raise ProbeFailure(
+            "no sourceValues type parsed for algo.* set queries; MSpaths / F1 "
+            "normalisation is unusable — inspect docs/engine-capabilities.md"
+        )
+
     node_form = None
     for form in NODE_LOADER_FORMS:
         if _first_ok(results, f"node_loader:{form}"):
@@ -209,9 +265,11 @@ def derive(results: list[ProbeResult]) -> Capabilities:
         rel_direction_both=both,
         rel_direction_incoming=incoming,
         pairwise_supported=any(r.name == "pairwise" and r.ok for r in results),
+        sourceValues_type=source_values_type,
         node_loader_form=node_form,
         edge_loader_form=edge_form,
         http_params_supported=any(r.name == "http_params" and r.ok for r in results),
+        count_path_supported=any(r.name == "count_path" and r.ok for r in results),
     )
 
 
