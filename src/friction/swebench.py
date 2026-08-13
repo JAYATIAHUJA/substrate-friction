@@ -78,8 +78,18 @@ def _parse_resolved(payload) -> set[str]:
     raise ValueError(f"unrecognised results shape: {type(payload)} {str(payload)[:120]}")
 
 
-def load_resolved(submission: str, split: str = "verified") -> set[str]:
-    """Fetch a submission's resolved-instance set, trying known result paths."""
+def load_resolved(submission: str, split: str = "verified",
+                  cache_dir: Path = Path("data/instances/resolved")) -> set[str]:
+    """Resolve a submission's resolved-instance set.
+
+    Reads ``<cache_dir>/<submission>.json`` if present (the raw results.json,
+    already fetched); only falls back to the network when the cache file is
+    absent. Keeps the plain ``load_resolved(name)`` call working.
+    """
+    cache_file = Path(cache_dir) / f"{submission}.json"
+    if cache_file.exists():
+        return _parse_resolved(json.loads(cache_file.read_text()))
+
     candidates = [
         f"{RAW}/evaluation/{split}/{submission}/results/results.json",
         f"{RAW}/evaluation/{split}/{submission}/results.json",

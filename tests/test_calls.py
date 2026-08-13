@@ -1,6 +1,6 @@
 from pathlib import Path
 from friction.parsing.symbols import parse_repo
-from friction.parsing.calls import resolve, resolve_with_stats
+from friction.parsing.calls import resolve, resolve_with_stats, _build_enclosing_index
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_pkg"
 
@@ -65,3 +65,31 @@ def test_stats_report_resolution_rate():
     _, stats = resolve_with_stats(FIXTURE, table)
     assert stats.call_sites > 0
     assert 0.0 <= stats.resolution_rate <= 1.0
+
+
+def test_enclosing_index_picks_inner_nested_function(tmp_path):
+    src = (
+        "def outer(x):\n"          # line 1
+        "    def inner(y):\n"      # line 2
+        "        return y\n"       # line 3
+        "    return inner(x)\n"    # line 4
+    )
+    (tmp_path / "nest.py").write_text(src)
+    table = parse_repo(tmp_path, repo_code=1)
+
+    by_qual = {f.qualname: f.id for f in table.functions}
+    outer_id = by_qual["nest.outer"]
+    inner_id = by_qual["nest.inner"]
+
+    file_id = next(f.id for f in table.files if f.path == "nest.py")
+    index = _build_enclosing_index(table)
+
+    # A line inside the inner def is enclosed by BOTH functions; the
+    # smallest-span (innermost) one must win.
+    assert index.find(file_id, 3) == inner_id
+    # A line only inside the outer def resolves to the outer function.
+    assert index.find(file_id, 1) == outer_id
+    assert index.find(file_id, 4) == outer_id
+    # A file with no functions / a line outside any span -> None.
+    assert index.find(file_id, 999) is None
+    assert index.find(-1, 3) is None

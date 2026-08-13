@@ -17,6 +17,7 @@ class Settings:
     max_len: int
     path_count: int
     rel_direction: str
+    fan_in_path_count: int = 500
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -30,4 +31,5 @@ class Settings:
             max_len=int(os.environ.get("HYDRA_MAX_LEN", "6")),
             path_count=int(os.environ.get("HYDRA_PATH_COUNT", "20")),
             rel_direction=os.environ.get("HYDRA_REL_DIRECTION", "both"),
+            fan_in_path_count=int(os.environ.get("HYDRA_FAN_IN_PATH_COUNT", "500")),
         )

@@ -123,7 +123,8 @@ def test_fan_in_counts_rows_client_side_uses_incoming_and_maxlen_one():
     # paths and fan_in() counts the returned rows itself.
     rows = [{"path": [990001, i]} for i in range(12)]
     t = StubTransport(rows)
-    count, cypher, millis = paths.fan_in(t, CAPS_NO_PAIRWISE, SETTINGS, [1, 2])
+    count, cypher, millis, truncated = paths.fan_in(
+        t, CAPS_NO_PAIRWISE, SETTINGS, [1, 2])
     assert count == 12
     assert "relDirection: 'incoming'" in cypher
     assert "maxLen: 1" in cypher
@@ -136,3 +137,47 @@ def test_fan_in_passes_string_ids_not_ints():
     paths.fan_in(t, CAPS_NO_PAIRWISE, SETTINGS, [1, 2])
     assert t.last_params["fixIds"] == ["1", "2"]
     assert all(isinstance(x, str) for x in t.last_params["fixIds"])
+
+
+def test_fan_in_cap_comes_from_settings_not_a_hardcoded_literal():
+    # F6 (fan-in load) must be capped by the configurable Settings field, not a
+    # literal buried in the query string, so the cap can be tuned per run.
+    small = Settings("bolt://x", "http://x", "t", "default", "default",
+                     "cell-0", 6, 20, "both", 7)
+    t = StubTransport([{"path": [990001, 1]}])
+    paths.fan_in(t, CAPS_NO_PAIRWISE, small, [1, 2])
+    assert "pathCount: 7" in t.last_cypher
+    assert "pathCount: 500" not in t.last_cypher
+
+
+def test_fan_in_flags_truncation_when_row_count_reaches_cap():
+    # A hub with more incoming CALLS than the cap is clipped; that clipping
+    # compresses exactly the high-friction tail, so it must be reported.
+    small = Settings("bolt://x", "http://x", "t", "default", "default",
+                     "cell-0", 6, 20, "both", 3)
+    rows = [{"path": [990001, i]} for i in range(3)]
+    t = StubTransport(rows)
+    count, cypher, millis, truncated = paths.fan_in(
+        t, CAPS_NO_PAIRWISE, small, [1, 2])
+    assert count == 3
+    assert truncated is True
+
+
+def test_fan_in_not_truncated_when_below_cap():
+    small = Settings("bolt://x", "http://x", "t", "default", "default",
+                     "cell-0", 6, 20, "both", 3)
+    rows = [{"path": [990001, i]} for i in range(2)]
+    t = StubTransport(rows)
+    count, cypher, millis, truncated = paths.fan_in(
+        t, CAPS_NO_PAIRWISE, small, [1, 2])
+    assert count == 2
+    assert truncated is False
+
+
+def test_fan_in_empty_inputs_are_not_truncated():
+    t = StubTransport([])
+    count, cypher, millis, truncated = paths.fan_in(
+        t, CAPS_NO_PAIRWISE, SETTINGS, [])
+    assert count == 0
+    assert truncated is False
+    assert t.last_cypher is None

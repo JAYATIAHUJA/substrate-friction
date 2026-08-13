@@ -69,13 +69,13 @@ def build_mspaths_cypher(caps: Capabilities, settings: Settings,
     )
 
 
-def build_fan_in_cypher(caps: Capabilities) -> str:
+def build_fan_in_cypher(caps: Capabilities, settings: Settings) -> str:
     config = ", ".join([
         "sourceLabel: 'Function'", "sourceProperty: 'sid'",
         "sourceValues: $fixIds",
         "relTypes: ['CALLS']",
         f"relDirection: '{caps.rel_direction_incoming}'",
-        "maxLen: 1", "pathCount: 500",
+        "maxLen: 1", f"pathCount: {settings.fan_in_path_count}",
     ])
     return f"CALL algo.SSpaths({{{config}}}) YIELD path RETURN path"
 
@@ -141,14 +141,20 @@ def fix_to_test_paths(transport, caps: Capabilities, settings: Settings,
 
 
 def fan_in(transport, caps: Capabilities, settings: Settings,
-           fix_ids: list[int]) -> tuple[int, str, float]:
+           fix_ids: list[int]) -> tuple[int, str, float, bool]:
     if not fix_ids:
-        return 0, "", 0.0
-    cypher = build_fan_in_cypher(caps)
+        return 0, "", 0.0, False
+    cypher = build_fan_in_cypher(caps, settings)
     start = time.perf_counter()
     rows = transport.query(cypher, {"fixIds": _str_ids(fix_ids)})
     millis = (time.perf_counter() - start) * 1000.0
     # count(path) is rejected by this build, so the returned paths are counted
     # here rather than by the engine.
     count = len(rows)
-    return count, cypher, round(millis, 2)
+    # The query caps returned rows at settings.fan_in_path_count. A hub function
+    # with more than that many incoming CALLS is silently clipped, compressing
+    # exactly the high-friction tail this metric exists to detect, so hitting the
+    # cap is surfaced rather than swallowed (same bias direction as the pathCount
+    # truncation the fidelity guard catches).
+    truncated = count >= settings.fan_in_path_count
+    return count, cypher, round(millis, 2), truncated

@@ -10,6 +10,7 @@ inventing edges.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -66,17 +67,65 @@ def _imports(tree_root: Node, src: bytes) -> dict[str, str]:
     return out
 
 
-def _enclosing(table: SymbolTable, file_id: int, line: int) -> int | None:
-    best: int | None = None
-    best_span = None
-    for fn in table.functions:
-        if fn.file_id != file_id:
-            continue
-        if fn.line_start <= line <= fn.line_end:
-            span = fn.line_end - fn.line_start
-            if best_span is None or span < best_span:
-                best, best_span = fn.id, span
-    return best
+class _EnclosingIndex:
+    """Fast enclosing-function lookup, built ONCE per resolve() call.
+
+    The previous implementation scanned every function in the whole repo for
+    each call site (O(functions x call_sites) — hundreds of millions of
+    comparisons on django). Here functions are grouped by file and, within a
+    file, sorted by ``line_start``. Because Python function bodies nest
+    properly (never partially overlap), among the intervals that contain a
+    given line the one with the LARGEST ``line_start`` is exactly the innermost
+    and therefore the smallest-span one. So a query walks candidates from the
+    last ``line_start <= line`` backwards and returns the first whose
+    ``line_end >= line``. A prefix-max of ``line_end`` lets the walk stop early
+    once no earlier function can possibly reach the line (the common
+    module-level call-site case).
+    """
+
+    __slots__ = ("_by_file",)
+
+    def __init__(self, table: SymbolTable) -> None:
+        # file_id -> (starts, line_ends, ids, prefix_max_end), all index-aligned
+        # and sorted by line_start ascending.
+        grouped: dict[int, list[tuple[int, int, int]]] = {}
+        for fn in table.functions:
+            grouped.setdefault(fn.file_id, []).append(
+                (fn.line_start, fn.line_end, fn.id)
+            )
+
+        self._by_file: dict[int, tuple[list[int], list[int], list[int], list[int]]] = {}
+        for file_id, rows in grouped.items():
+            rows.sort(key=lambda r: r[0])
+            starts = [r[0] for r in rows]
+            ends = [r[1] for r in rows]
+            ids = [r[2] for r in rows]
+            prefix_max_end: list[int] = []
+            running = 0
+            for end in ends:
+                running = end if end > running else running
+                prefix_max_end.append(running)
+            self._by_file[file_id] = (starts, ends, ids, prefix_max_end)
+
+    def find(self, file_id: int, line: int) -> int | None:
+        entry = self._by_file.get(file_id)
+        if entry is None:
+            return None
+        starts, ends, ids, prefix_max_end = entry
+        # Last function whose def line is at or before `line`.
+        i = bisect_right(starts, line) - 1
+        while i >= 0:
+            # No function in [0..i] can reach `line`; nothing earlier will either.
+            if prefix_max_end[i] < line:
+                break
+            if ends[i] >= line:
+                return ids[i]
+            i -= 1
+        return None
+
+
+def _build_enclosing_index(table: SymbolTable) -> _EnclosingIndex:
+    return _EnclosingIndex(table)
 
 
 def _unique_suffix_index(table: SymbolTable) -> dict[str, int]:
@@ -104,6 +153,7 @@ def resolve_with_stats(root: Path, table: SymbolTable) -> tuple[list[Edge], Reso
     unique_names = _unique_suffix_index(table)
     fn_by_id = {f.id: f for f in table.functions}
     cls_by_id = {c.id: c for c in table.classes}
+    enclosing = _build_enclosing_index(table)
 
     # Structural edges that need no source walk
     for fn in table.functions:
@@ -148,7 +198,7 @@ def resolve_with_stats(root: Path, table: SymbolTable) -> tuple[list[Edge], Reso
                 continue
             call_sites += 1
             line = node.start_point[0] + 1
-            caller = _enclosing(table, file_id, line)
+            caller = enclosing.find(file_id, line)
             if caller is None:
                 continue
 
