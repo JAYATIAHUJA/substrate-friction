@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+data/swebench/
+data/graphs/
+data/instances/
+hydradb-data/
+*.egg-info/
+docs/plots/
+minio-data/
+secrets/
+.venv/
+.superpowers/
