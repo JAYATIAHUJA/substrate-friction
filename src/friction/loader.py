@@ -159,3 +159,41 @@ def load(transport, caps: Capabilities, out_dir: Path,
         counts[rel_type] += len(rows)
 
     return dict(counts)
+
+
+def main() -> None:
+    """`python -m friction.loader --dir <dir>` — load nodes.ndjson/edges.ndjson
+    from `--dir` into the live engine over Bolt. Used by setup.sh to load the
+    shipped pre-built subgraphs; the console script is otherwise unreachable."""
+    import argparse
+
+    from friction.client import connect
+    from friction.config import Settings
+    from friction.probe import load_capabilities
+
+    parser = argparse.ArgumentParser(prog="friction.loader")
+    parser.add_argument("--dir", default="data/shipped",
+                        help="directory holding nodes.ndjson and edges.ndjson")
+    parser.add_argument("--batch-size", type=int, default=1000)
+    parser.add_argument("--caps", default="docs/engine-capabilities.md",
+                        help="capability report emitted by `python -m friction.probe`")
+    args = parser.parse_args()
+
+    # The engine's admission control rejects any UNWIND batch over 1024 items
+    # ("client_query_batch_items rejected by admission control: actual N exceeds
+    # limit 1024"), so clamp regardless of what was requested.
+    batch_size = min(args.batch_size, 1024)
+
+    caps = load_capabilities(Path(args.caps))
+    transport = connect(Settings.from_env(), prefer="bolt")
+    try:
+        counts = load(transport, caps, Path(args.dir), batch_size=batch_size)
+    finally:
+        transport.close()
+    total = sum(counts.values())
+    print(json.dumps(counts, sort_keys=True))
+    print(f"loaded {total} rows from {args.dir}")
+
+
+if __name__ == "__main__":
+    main()

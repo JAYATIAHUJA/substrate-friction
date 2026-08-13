@@ -1,0 +1,25 @@
+{
+  "band_base_first": 4000000000,
+  "band_base_last": 4490000000,
+  "band_stride": 10000000,
+  "combined_edges": 660231,
+  "combined_nodes": 407302,
+  "description": "Pre-built, pre-banded per-instance code subgraphs for Substrate Friction. Load with: python -m friction.loader --dir data/shipped",
+  "endpoint_bearing_instances": 43,
+  "engine_pin": "02a40025d2d57e97ab2754c8256219cdbfeab379 (v0.1.1, AGPL-3.0)",
+  "files": {
+    "annotations.json": 31040,
+    "edges.ndjson.gz": 2877455,
+    "engine_cache.json": 105669,
+    "nodes.ndjson.gz": 8652978,
+    "subgraphs.json": 40052
+  },
+  "instances": 50,
+  "provenance": "SWE-bench Verified django instances; graphs built by friction.build (tree-sitter over the base_commit tree WITH each instance test_patch applied), sliced to per-instance subgraphs by friction.subgraph.",
+  "resolved_sets": [
+    "20240402_sweagent_gpt4.json",
+    "20240620_sweagent_claude3.5sonnet.json",
+    "20241029_OpenHands-CodeAct-2.1-sonnet-20241022.json"
+  ],
+  "total_bytes": 11766745
+}

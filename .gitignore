@@ -7,7 +7,6 @@ data/graphs/
 data/instances/
 hydradb-data/
 *.egg-info/
-docs/plots/
 minio-data/
 secrets/
 .venv/
