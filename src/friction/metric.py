@@ -59,16 +59,26 @@ def raw_components(path_set: PathSet, fix_ids: list[int], test_ids: list[int],
     return Components(f1, f2, f3, f4, f5, f6)
 
 
-def normalise(all_components: list[Components]) -> list[Components]:
-    if not all_components:
-        return []
+def fit_bounds(all_components: list[Components]) -> dict[str, tuple[float, float]]:
+    """Min-max bounds per component, fit on exactly the instances passed in.
+
+    Pass only the training split here when evaluating a fitted model, so the
+    held-out split's scaling never depends on its own extremes.
+    """
     bounds: dict[str, tuple[float, float]] = {}
     for name in COMPONENT_NAMES:
         values = [getattr(c, name) for c in all_components]
-        bounds[name] = (min(values), max(values))
+        bounds[name] = (min(values), max(values)) if values else (0.0, 0.0)
+    return bounds
 
+
+def normalise_with_bounds(components: list[Components],
+                          bounds: dict[str, tuple[float, float]]) -> list[Components]:
+    """Scale `components` using externally-supplied bounds. Held-out values that
+    fall outside the training range map outside [0, 1] on purpose — clamping
+    would hide train/test distribution shift."""
     out: list[Components] = []
-    for c in all_components:
+    for c in components:
         scaled: dict[str, float] = {}
         for name in COMPONENT_NAMES:
             low, high = bounds[name]
@@ -76,6 +86,14 @@ def normalise(all_components: list[Components]) -> list[Components]:
             scaled[name] = 0.0 if span == 0 else (getattr(c, name) - low) / span
         out.append(Components(**scaled))
     return out
+
+
+def normalise(all_components: list[Components]) -> list[Components]:
+    """Full-set min-max scaling for the equal-weights headline. Unaffected by
+    the train/test split; the fitted path uses fit_bounds/normalise_with_bounds."""
+    if not all_components:
+        return []
+    return normalise_with_bounds(all_components, fit_bounds(all_components))
 
 
 def score(components: Components, weights: dict[str, float]) -> float:

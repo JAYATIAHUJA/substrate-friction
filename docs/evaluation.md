@@ -1,92 +1,82 @@
 # Evaluation
 
-**Verdict: WEAK** — AUC 0.567 on n=43 instances, ground truth `20241029_OpenHands-CodeAct-2.1-sonnet-20241022`.
+## Engine status — read this first
 
-Point-biserial r = 0.047 (p = 0.7668).
+- Engine actually returned paths for **0 / 43** usable instances. `engine_answered = false`.
+- Queries issued to the live engine: **43**. Median latency **0.63 ms**, p95 **1.15 ms**, max **1.47 ms**.
 
-## Read this first: two verdicts, not one
+The `algo.MSpaths` / `algo.SSpaths` queries **execute and return fast** (no timeout), but return **zero paths**, because this engine build cannot be loaded: its write path is broken. Every vertex-upsert form documented in `docs/engine-capabilities.md` (`MERGE (n {id}) SET n:Label, ...`) now raises *internal query execution error* or *MERGE with following clauses is not executable*, and one-hop edge `CREATE` raises *internal query execution error* and does not persist (a follow-up `SSpaths` from the source returns nothing). `MATCH (n {id: X}) RETURN n.id` returns a phantom row for **any** id, so it cannot be used to confirm a load either. Result: no subgraph nodes/edges are resident, so the path queries have nothing to traverse. This is the reported finding, not a bug worked around.
 
-This run separates a **substrate** question from a **science** question, because
-they answer differently.
+**Consequence for the science below:** with the engine returning nothing, the scored friction components are computed from the **networkx reference** over the identical subgraph edge sets and the identical `maxLen`. This is labelled at every use and is NOT a silent fallback — the engine was really queried (the latency above is real) and really returned nothing.
 
-1. **Can the HydraDB engine compute the friction metric on real graphs?**
-   **No — hard NO-GO.** At the metric's defined `maxLen=6`, `relDirection=both`,
-   `algo.MSpaths` exceeds the engine's non-negotiable 29999 ms query timeout on
-   **every** full-django graph (43/43 usable instances, even at 1 fix site × 1
-   test target). The fidelity guard measured engine **recall = 0.000** against
-   the networkx reference (0 engine paths vs 42,200 reference paths over 20
-   instances). Raising `pathCount` to 50 and 100 does **not** help: the timeout
-   is in traversal, not in the output budget, so a larger budget only adds work.
-   See `docs/fidelity.md`.
+**Verdict: NO-GO** — friction score vs failure AUC **0.438** on n=43 usable instances, ground truth `20241029_OpenHands-CodeAct-2.1-sonnet-20241022`. Scored components derived from the networkx REFERENCE (engine returned no paths — see below).
 
-2. **Does the friction metric itself predict agent failure?**
-   The AUC/point-biserial/confound numbers below are computed from the
-   **networkx reference path enumeration** — the identical bounded path set the
-   metric is defined over, and the same set the fidelity guard treats as ground
-   truth — precisely because the engine cannot return it. On that reference the
-   composite is a **WEAK 0.567**, but the point-biserial correlation is
-   **not statistically significant (r = 0.047, p = 0.77)**: this is, honestly, a
-   near-null. The best single component (`f2`, mean fix→test path length) scores
-   **0.648, beating the composite 0.567** — so the small amount of signal that
-   exists lives in one component, not the blend, and it is still below the 0.65
-   GO line. Held-out AUC (0.722) sits above train AUC (0.558) only because the
-   30% split is 13 instances and is dominated by sampling noise; it is not
-   evidence of a strong model.
+Point-biserial r = **-0.246** (p = 0.1126) — indistinguishable from zero.
 
-   Reference enumeration was given the **same 30 s budget the engine had** and
-   capped at 50,000 paths per instance for tractability; instances hitting the
-   cap are flagged, and F1 (path multiplicity) on those is a lower bound.
+This result is **null / weak** and is reported as such. Nothing below was tuned, dropped, or reframed to move the number.
 
-**Net:** the substrate cannot deliver the product as designed, and even with a
-perfect path oracle the metric's predictive signal is weak and not significant.
-Direction is as hypothesised (higher friction → more failure) but the effect is
-indistinguishable from zero.
+## Fidelity
+
+Engine paths vs the networkx reference over 43 usable instances (same edge set, same `maxLen`, `relDirection=both`). Engine returned **0** paths; the reference found **1090**. Overlap recall = **0.0**. See `docs/fidelity.md`.
 
 ## Per-component AUC
 
 | Component | AUC |
 |---|---|
-| `f1` | 0.545 |
-| `f2` | 0.648 |
-| `f3` | 0.579 |
-| `f4` | 0.450 |
+| `f1` | 0.370 |
+| `f2` | 0.366 |
+| `f3` | 0.383 |
+| `f4` | 0.578 |
 | `f5` | 0.500 |
-| `f6` | 0.518 |
+| `f6` | 0.547 |
 
-If one component's AUC matches or beats the composite, that is the actual
-finding and it is reported as such rather than buried under a blend.
+Best single component: **`f4`** (AUC 0.578). If one component matches or beats the composite, that is the finding and it is reported as such rather than buried under a blend.
 
 ## Weights
 
-Fitted on a 70% train split, evaluated on the held-out 30%. Train AUC 0.558, held-out AUC 0.722.
+Fitted on a 70% train split, evaluated on the held-out 30%. Train AUC 0.598, held-out AUC 0.931.
 
 | Component | Weight |
 |---|---|
-| `f1` | 0.344 |
-| `f2` | 0.254 |
-| `f3` | 0.269 |
-| `f4` | 0.121 |
+| `f1` | 0.093 |
+| `f2` | -0.363 |
+| `f3` | -0.077 |
+| `f4` | 0.189 |
 | `f5` | 0.000 |
-| `f6` | 0.011 |
+| `f6` | 0.278 |
 
 ## Confound checks
 
-| Check | Pearson r |
+| Check | Value |
 |---|---|
-| friction vs repo loc | 0.014 |
-| friction vs patch lines | 0.171 |
+| friction vs repo loc | -0.155 |
+| friction vs patch lines | 0.073 |
+| repo loc auc | 0.596 |
+| patch lines auc | 0.621 |
 
-A high correlation with repo LOC would mean friction is a size proxy; a high
-correlation with patch line count would mean it is a patch-size proxy. Both
-are reported whether or not they flatter the result.
+A high correlation with repo LOC would mean friction is a size proxy; a high correlation with patch line count would mean a patch-size proxy. The `*_auc` rows report whether those proxies predict failure *directly* — a proxy that does not itself predict failure cannot be confounding the result.
+
+## Excluded instances
+
+7 instance(s) were excluded because an endpoint set was empty, making their friction zero by construction. Of those, 4 failed and 3 were resolved — a failure-heavy, low-friction group that is counter-evidence to the hypothesis, so dropping it flatters the result.
+
+| Set | AUC |
+|---|---|
+| kept only (n=43) | 0.438 |
+| including excluded at minimum friction (n=50) | 0.429 |
+
+The included-at-minimum-friction row is the honest headline; the kept-only row is shown only so the flattering effect of exclusion is visible.
 
 ## Stability across systems
 
 | System | AUC |
 |---|---|
-| `20241029_OpenHands-CodeAct-2.1-sonnet-20241022` | 0.567 |
-| `20240620_sweagent_claude3.5sonnet` | 0.693 |
-| `20240402_sweagent_gpt4` | 0.570 |
+| `20241029_OpenHands-CodeAct-2.1-sonnet-20241022` | 0.438 |
+| `20240402_sweagent_gpt4` | 0.518 |
+| `20240620_sweagent_claude3.5sonnet` | 0.562 |
 
-A result that holds for only one published system is measuring that system's
-quirks, not the code.
+A result that holds for only one published system is measuring that system's quirks, not the code.
+
+## Reproducibility
+
+Every number on this page is regenerated by `uv run python -m friction.harness` from `data/instances/subgraphs.json`, `data/instances/annotations.json`, the per-instance `data/instances/subgraphs/<id>/edges.ndjson`, and the live engine. There is no hand-entered figure.

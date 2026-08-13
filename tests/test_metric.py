@@ -82,3 +82,32 @@ def test_band_thresholds():
     assert metric.band(0.20) == "LOW"
     assert metric.band(0.50) == "MEDIUM"
     assert metric.band(0.79) == "HIGH"
+
+
+def test_fit_bounds_uses_only_the_supplied_components():
+    train = [metric.Components(0, 0, 0, 0, 0, 0),
+             metric.Components(4, 0, 0, 0, 0, 0)]
+    bounds = metric.fit_bounds(train)
+    # A held-out extreme of 10 must not widen the training bounds.
+    assert bounds["f1"] == (0.0, 4.0)
+
+
+def test_normalise_with_bounds_scales_heldout_by_train_bounds():
+    train = [metric.Components(0, 0, 0, 0, 0, 0),
+             metric.Components(10, 0, 0, 0, 0, 0)]
+    bounds = metric.fit_bounds(train)
+    held_out = [metric.Components(5, 0, 0, 0, 0, 0),
+                metric.Components(20, 0, 0, 0, 0, 0)]
+    out = metric.normalise_with_bounds(held_out, bounds)
+    assert out[0].f1 == pytest.approx(0.5)
+    # Above the training max -> deliberately exceeds 1.0, not clamped.
+    assert out[1].f1 == pytest.approx(2.0)
+
+
+def test_normalise_is_normalise_with_bounds_over_the_full_set():
+    raw = [metric.Components(0, 0, 0, 0, 0, 0),
+           metric.Components(10, 10, 10, 10, 10, 10),
+           metric.Components(5, 5, 5, 5, 5, 5)]
+    direct = metric.normalise(raw)
+    via_pair = metric.normalise_with_bounds(raw, metric.fit_bounds(raw))
+    assert [c.as_dict() for c in direct] == [c.as_dict() for c in via_pair]

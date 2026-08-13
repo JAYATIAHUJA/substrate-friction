@@ -62,10 +62,23 @@ def component_aucs(rows: list[InstanceRow], system: str) -> dict[str, float]:
     return out
 
 
+def _feature_row(components) -> list[float]:
+    """Feature vector in the exact convention score() uses: f4 is inverted so
+    convergence (paths funnelling through shared nodes) reads as higher friction,
+    matching the scored blend. Training on raw f4 while scoring on (1 - f4) is
+    the incoherence this replaces."""
+    values = components.as_dict()
+    values["f4"] = 1.0 - values["f4"]
+    return [values[n] for n in COMPONENT_NAMES]
+
+
 def fit_weights(rows: list[InstanceRow], system: str,
                 seed: int = 0) -> tuple[dict[str, float], float, float]:
     """Fit on a train split, report on a held-out split. Never fit and report
-    on the same data."""
+    on the same data. Coefficient sign is preserved (a protective component
+    keeps a negative weight instead of being folded into positive friction), and
+    both AUCs come from the fitted model's own predict_proba rather than a
+    re-derived, sign-stripped linear blend."""
     indexed = list(range(len(rows)))
     random.Random(seed).shuffle(indexed)
     split = max(1, int(len(indexed) * 0.7))
@@ -74,7 +87,7 @@ def fit_weights(rows: list[InstanceRow], system: str,
         return dict(EQUAL), float("nan"), float("nan")
 
     def matrix(idx):
-        return [[getattr(rows[i].components, n) for n in COMPONENT_NAMES] for i in idx]
+        return [_feature_row(rows[i].components) for i in idx]
 
     def target(idx):
         return [1 if rows[i].failed.get(system, False) else 0 for i in idx]
@@ -88,12 +101,13 @@ def fit_weights(rows: list[InstanceRow], system: str,
 
     coefs = model.coef_[0]
     magnitude = sum(abs(c) for c in coefs) or 1.0
-    weights = {n: abs(c) / magnitude for n, c in zip(COMPONENT_NAMES, coefs)}
+    # Sign preserved: reports the direction the model actually found.
+    weights = {n: float(c) / magnitude for n, c in zip(COMPONENT_NAMES, coefs)}
 
-    train_scores = [score(rows[i].components, weights) for i in train_idx]
-    test_scores = [score(rows[i].components, weights) for i in test_idx]
-    return weights, auc(train_scores, [bool(v) for v in y_train]), \
-        auc(test_scores, [bool(v) for v in target(test_idx)])
+    train_prob = [float(p) for p in model.predict_proba(matrix(train_idx))[:, 1]]
+    test_prob = [float(p) for p in model.predict_proba(matrix(test_idx))[:, 1]]
+    return weights, auc(train_prob, [bool(v) for v in y_train]), \
+        auc(test_prob, [bool(v) for v in target(test_idx)])
 
 
 def _pearson(xs: list[float], ys: list[float]) -> float:
@@ -108,10 +122,48 @@ def _pearson(xs: list[float], ys: list[float]) -> float:
 
 
 def confounds(rows: list[InstanceRow], system: str) -> dict[str, float]:
+    """Correlate friction with size proxies AND test whether those proxies
+    predict failure directly. A correlation alone cannot rule a confound in or
+    out: if repo LOC neither correlates with friction nor predicts failure, it
+    is not confounding anything. The direct-predictor AUCs make that visible.
+    The `system` argument selects the ground-truth labels for those AUCs."""
     scores = _scores(rows, EQUAL)
+    labels = _labels(rows, system)
+    repo_loc = [float(r.repo_loc) for r in rows]
+    patch_lines = [float(r.patch_lines) for r in rows]
     return {
-        "friction_vs_repo_loc": _pearson(scores, [float(r.repo_loc) for r in rows]),
-        "friction_vs_patch_lines": _pearson(scores, [float(r.patch_lines) for r in rows]),
+        "friction_vs_repo_loc": _pearson(scores, repo_loc),
+        "friction_vs_patch_lines": _pearson(scores, patch_lines),
+        "repo_loc_auc": auc(repo_loc, labels),
+        "patch_lines_auc": auc(patch_lines, labels),
+    }
+
+
+def label_distribution(rows: list[InstanceRow], system: str) -> dict[str, int]:
+    labels = _labels(rows, system)
+    failed = sum(1 for f in labels if f)
+    return {"n": len(rows), "failed": failed, "resolved": len(rows) - failed}
+
+
+def sensitivity_excluded(kept: list[InstanceRow], excluded: list[InstanceRow],
+                         system: str) -> dict:
+    """Report the equal-weights AUC both ways: on the kept set alone, and with
+    the excluded (empty-endpoint, zero-friction-by-construction) instances added
+    back at minimum friction.
+
+    The excluded set is failure-heavy and low-friction, i.e. counter-evidence.
+    Dropping it silently flatters the metric, so the honest number is the one
+    that includes it. `included_auc` places every excluded instance at score 0.0
+    (the floor the metric assigns when there are no paths)."""
+    kept_scores = _scores(kept, EQUAL)
+    kept_labels = _labels(kept, system)
+    all_scores = kept_scores + [0.0] * len(excluded)
+    all_labels = kept_labels + _labels(excluded, system)
+    return {
+        "kept": label_distribution(kept, system),
+        "excluded": label_distribution(excluded, system),
+        "kept_auc": auc(kept_scores, kept_labels),
+        "included_auc": auc(all_scores, all_labels),
     }
 
 
@@ -149,6 +201,53 @@ def plot(rows: list[InstanceRow], system: str, path: Path) -> None:
     plt.close(fig)
 
 
+def _exclusion_section(results: dict) -> str:
+    """Markdown block (trailing blank line included) disclosing which instances
+    were dropped and how the AUC moves when they are added back. Present whether
+    or not exclusion data was supplied — silence is not an option here."""
+    sens = results.get("sensitivity")
+    excluded = results.get("excluded_instances", [])
+    system = results.get("system", "")
+    lines = ["## Excluded instances", ""]
+    if sens is None and not excluded:
+        lines += [
+            "No exclusion record was supplied to this report. If any instances were "
+            "dropped for empty endpoint sets, disclose their count, names, and label "
+            "distribution here. A bare \"n/n usable\" without this section is not an "
+            "acceptable summary.",
+            "",
+        ]
+        return "\n".join(lines) + "\n"
+
+    kept = sens["kept"] if sens else {}
+    exc = sens["excluded"] if sens else label_distribution(excluded, system)
+    lines += [
+        f"{exc['n']} instance(s) were excluded because an endpoint set was empty, "
+        f"making their friction zero by construction. Of those, {exc['failed']} "
+        f"failed and {exc['resolved']} were resolved — a failure-heavy, low-friction "
+        "group that is counter-evidence to the hypothesis, so dropping it flatters "
+        "the result.",
+        "",
+    ]
+    if excluded:
+        names = ", ".join(f"`{r.instance_id}`" for r in excluded)
+        lines += [f"Excluded: {names}.", ""]
+    if sens:
+        lines += [
+            "| Set | AUC |",
+            "|---|---|",
+            f"| kept only (n={kept.get('n', '?')}) | {sens['kept_auc']:.3f} |",
+            f"| including excluded at minimum friction "
+            f"(n={kept.get('n', 0) + exc['n']}) | {sens['included_auc']:.3f} |",
+            "",
+            "The included-at-minimum-friction row is the honest headline; the "
+            "kept-only row is shown only so the flattering effect of exclusion is "
+            "visible.",
+            "",
+        ]
+    return "\n".join(lines) + "\n"
+
+
 def write_report(rows: list[InstanceRow], results: dict, path: Path) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -183,15 +282,18 @@ def write_report(rows: list[InstanceRow], results: dict, path: Path) -> None:
     ]
     for name, value in results["weights"].items():
         lines.append(f"| `{name}` | {value:.3f} |")
-    lines += ["", "## Confound checks", "", "| Check | Pearson r |", "|---|---|"]
+    lines += ["", "## Confound checks", "", "| Check | Value |", "|---|---|"]
     for name, value in results["confounds"].items():
         lines.append(f"| {name.replace('_', ' ')} | {value:.3f} |")
     lines += [
         "",
         "A high correlation with repo LOC would mean friction is a size proxy; a high",
-        "correlation with patch line count would mean it is a patch-size proxy. Both",
-        "are reported whether or not they flatter the result.",
+        "correlation with patch line count would mean it is a patch-size proxy. The",
+        "`*_auc` rows go further: they report whether repo LOC or patch size predict",
+        "failure *directly*. A proxy that does not itself predict failure cannot be",
+        "confounding the result. All are reported whether or not they flatter it.",
         "",
+        _exclusion_section(results),
         "## Stability across systems",
         "",
         "| System | AUC |",
