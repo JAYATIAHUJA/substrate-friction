@@ -1,0 +1,1925 @@
+[
+  {
+    "instance_id": "django__django-10097",
+    "base_commit": "b9cf764be62e77b4777b3a75ec256f6209a57671",
+    "band": 4000000000,
+    "id_range": [
+      4000000000,
+      4000033084
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10565,
+    "edges": 21604,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 3,
+    "seeds": 387,
+    "seed_components": 1,
+    "seed_pairs_total": 74691,
+    "seed_pairs_connected": 74691,
+    "fix_site_ids": [],
+    "test_target_ids": [
+      4000013477,
+      4000013476,
+      4000013467,
+      4000013463,
+      4000013464,
+      4000013471,
+      4000013469,
+      4000013470,
+      4000013402,
+      4000013394,
+      4000013391,
+      4000013396,
+      4000013412,
+      4000013553,
+      4000013556,
+      4000013554,
+      4000013551,
+      4000013552,
+      4000013555,
+      4000013550,
+      4000013581,
+      4000013580,
+      4000013582,
+      4000013458,
+      4000013449,
+      4000013450,
+      4000013452,
+      4000013454,
+      4000013455,
+      4000013453,
+      4000013451,
+      4000013400,
+      4000013564,
+      4000013565,
+      4000013395,
+      4000013397,
+      4000013393,
+      4000013392,
+      4000013560,
+      4000013559,
+      4000013561,
+      4000013562,
+      4000013407,
+      4000013408,
+      4000013568,
+      4000013569,
+      4000013436,
+      4000013435,
+      4000013434,
+      4000013432,
+      4000013433,
+      4000013431,
+      4000013430,
+      4000014238,
+      4000023567,
+      4000023569,
+      4000023568,
+      4000027368,
+      4000014313,
+      4000014314,
+      4000014310,
+      4000014312,
+      4000014315,
+      4000014318,
+      4000027212,
+      4000027211,
+      4000027213,
+      4000027210,
+      4000027209,
+      4000013533,
+      4000013532,
+      4000013529,
+      4000013530,
+      4000013535,
+      4000013536,
+      4000013534,
+      4000013531,
+      4000016174,
+      4000016168,
+      4000016178,
+      4000016176,
+      4000016177,
+      4000016167,
+      4000016169,
+      4000016170,
+      4000016172,
+      4000016171,
+      4000016173,
+      4000016175,
+      4000013538,
+      4000021716,
+      4000021714,
+      4000021715,
+      4000021717,
+      4000021708,
+      4000021710,
+      4000021707,
+      4000021718,
+      4000021709,
+      4000021711,
+      4000021712,
+      4000021713,
+      4000013522,
+      4000023894,
+      4000023890,
+      4000023946,
+      4000023943,
+      4000023949,
+      4000013217,
+      4000013218,
+      4000013220,
+      4000013223,
+      4000013224,
+      4000013222,
+      4000014316,
+      4000023924,
+      4000023922,
+      4000023923,
+      4000023920,
+      4000023921,
+      4000023958,
+      4000023959,
+      4000014979,
+      4000014981,
+      4000014980,
+      4000014982,
+      4000014967,
+      4000014966,
+      4000014965,
+      4000014977,
+      4000016311,
+      4000016305,
+      4000016309,
+      4000016307,
+      4000016313,
+      4000016306,
+      4000016308,
+      4000016312,
+      4000016302,
+      4000016304,
+      4000016303,
+      4000016301,
+      4000016310,
+      4000016314,
+      4000023525,
+      4000023550,
+      4000023526,
+      4000023528,
+      4000023529,
+      4000023527,
+      4000023559,
+      4000023530,
+      4000023539,
+      4000023542,
+      4000023546,
+      4000023543,
+      4000023537,
+      4000023561,
+      4000023547,
+      4000023560,
+      4000023534,
+      4000023532,
+      4000020222,
+      4000020223,
+      4000019921,
+      4000014984,
+      4000015865,
+      4000015863,
+      4000015864,
+      4000015866,
+      4000015867,
+      4000013540,
+      4000013544,
+      4000013543,
+      4000013547,
+      4000013541,
+      4000013542,
+      4000013545,
+      4000013546,
+      4000014957,
+      4000014952,
+      4000014953,
+      4000014955,
+      4000014951,
+      4000014954,
+      4000014956,
+      4000015839,
+      4000023883,
+      4000023872,
+      4000023876,
+      4000023880,
+      4000023871,
+      4000023879,
+      4000023873,
+      4000031742,
+      4000031746,
+      4000031751,
+      4000031750,
+      4000031744,
+      4000031749,
+      4000031745,
+      4000031743,
+      4000031748,
+      4000031747,
+      4000015987,
+      4000015989,
+      4000015988,
+      4000015927,
+      4000015929,
+      4000015928,
+      4000015979,
+      4000015980,
+      4000015981,
+      4000015983,
+      4000015982,
+      4000015984,
+      4000015977,
+      4000015978,
+      4000014945,
+      4000014943,
+      4000014942,
+      4000014947,
+      4000014948,
+      4000014949,
+      4000020232,
+      4000020231,
+      4000023829,
+      4000023832,
+      4000023818,
+      4000023823,
+      4000023826,
+      4000015935,
+      4000015932,
+      4000015934,
+      4000015936,
+      4000015933,
+      4000015918,
+      4000015916,
+      4000015919,
+      4000015915,
+      4000015917,
+      4000023684,
+      4000023685,
+      4000023616,
+      4000023628,
+      4000023624,
+      4000023678,
+      4000023722,
+      4000023709,
+      4000023706,
+      4000023712,
+      4000023703,
+      4000023725,
+      4000023719,
+      4000023620,
+      4000023623,
+      4000023619,
+      4000023673,
+      4000023664,
+      4000023670,
+      4000023667,
+      4000023642,
+      4000023639,
+      4000023645,
+      4000023637,
+      4000023687,
+      4000023661,
+      4000023658,
+      4000023634,
+      4000023681,
+      4000023617,
+      4000023700,
+      4000023697,
+      4000023655,
+      4000023715,
+      4000023718,
+      4000023646,
+      4000023649,
+      4000023652,
+      4000023632,
+      4000023633,
+      4000023690,
+      4000023692,
+      4000015993,
+      4000015991,
+      4000015994,
+      4000015992,
+      4000023754,
+      4000023755,
+      4000023752,
+      4000023762,
+      4000023753,
+      4000023748,
+      4000023772,
+      4000023766,
+      4000023769,
+      4000023746,
+      4000023758,
+      4000023759,
+      4000023763,
+      4000023751,
+      4000015939,
+      4000015944,
+      4000015945,
+      4000015947,
+      4000015946,
+      4000015942,
+      4000015943,
+      4000015941,
+      4000015948,
+      4000015940,
+      4000015949,
+      4000015952,
+      4000015953,
+      4000015951,
+      4000015950,
+      4000015954,
+      4000031736,
+      4000031738,
+      4000031739,
+      4000031735,
+      4000031737,
+      4000013578,
+      4000013577,
+      4000013576,
+      4000023778,
+      4000023777,
+      4000023782,
+      4000023792,
+      4000023779,
+      4000023791,
+      4000023780,
+      4000023785,
+      4000023796,
+      4000023795,
+      4000023783,
+      4000023784,
+      4000023786,
+      4000023812,
+      4000023801,
+      4000023808,
+      4000023803,
+      4000023802,
+      4000023804,
+      4000023806,
+      4000023810,
+      4000023814,
+      4000016830,
+      4000016832,
+      4000016834,
+      4000016833,
+      4000020300,
+      4000020301,
+      4000020299,
+      4000020302,
+      4000020308,
+      4000020305,
+      4000020312,
+      4000020306,
+      4000020311,
+      4000020304,
+      4000020307,
+      4000020310,
+      4000020309,
+      4000026288,
+      4000026289,
+      4000028831,
+      4000028815,
+      4000028816,
+      4000028818,
+      4000028817,
+      4000028823,
+      4000028820,
+      4000028825,
+      4000028824,
+      4000028826,
+      4000028828,
+      4000028819,
+      4000028822,
+      4000028814,
+      4000028809,
+      4000028810,
+      4000028811,
+      4000028813,
+      4000028812,
+      4000028827,
+      4000028821
+    ],
+    "seconds": 0.351
+  },
+  {
+    "instance_id": "django__django-10554",
+    "base_commit": "14d026cccb144c6877294ba4cd4e03ebf0842498",
+    "band": 4010000000,
+    "id_range": [
+      4010000000,
+      4010034618
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 3621,
+    "edges": 7739,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 3,
+    "seeds": 4,
+    "seed_components": 1,
+    "seed_pairs_total": 6,
+    "seed_pairs_connected": 6,
+    "fix_site_ids": [
+      4010007327,
+      4010007466
+    ],
+    "test_target_ids": [
+      4010027887,
+      4010027886
+    ],
+    "seconds": 0.328
+  },
+  {
+    "instance_id": "django__django-10880",
+    "base_commit": "838e432e3e5519c5383d12018e6c78f8ec7833c1",
+    "band": 4020000000,
+    "id_range": [
+      4020000000,
+      4020034260
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 3902,
+    "edges": 5857,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 3,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4020005905
+    ],
+    "test_target_ids": [
+      4020012798
+    ],
+    "seconds": 0.333
+  },
+  {
+    "instance_id": "django__django-10914",
+    "base_commit": "e7fd69d051eaa67cb17f172a39b57253e9cb831a",
+    "band": 4030000000,
+    "id_range": [
+      4030000000,
+      4030034235
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 11425,
+    "edges": 17296,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 1,
+    "seed_components": 1,
+    "seed_pairs_total": 0,
+    "seed_pairs_connected": 0,
+    "fix_site_ids": [],
+    "test_target_ids": [
+      4030032429
+    ],
+    "seconds": 0.368
+  },
+  {
+    "instance_id": "django__django-10973",
+    "base_commit": "ddb293685235fd09e932805771ae97f72e817181",
+    "band": 4040000000,
+    "id_range": [
+      4040000000,
+      4040034243
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 8247,
+    "edges": 11176,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 6,
+    "seed_components": 1,
+    "seed_pairs_total": 15,
+    "seed_pairs_connected": 15,
+    "fix_site_ids": [
+      4040005160,
+      4040005162
+    ],
+    "test_target_ids": [
+      4040015931,
+      4040015928,
+      4040015930,
+      4040015929
+    ],
+    "seconds": 0.376
+  },
+  {
+    "instance_id": "django__django-10999",
+    "base_commit": "36300ef336e3f130a0dadc1143163ff3d23dc843",
+    "band": 4050000000,
+    "id_range": [
+      4050000000,
+      4050034260
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 7225,
+    "edges": 10286,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [],
+    "test_target_ids": [
+      4050033344,
+      4050033338
+    ],
+    "seconds": 0.354
+  },
+  {
+    "instance_id": "django__django-11066",
+    "base_commit": "4b45b6c8e4d7c9701a332e80d3b1c84209dc36e2",
+    "band": 4060000000,
+    "id_range": [
+      4060000000,
+      4060034641
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 8850,
+    "edges": 17207,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4060001286
+    ],
+    "test_target_ids": [
+      4060015234
+    ],
+    "seconds": 0.38
+  },
+  {
+    "instance_id": "django__django-11087",
+    "base_commit": "8180ffba21bf10f4be905cb0d4890dc2bcff2788",
+    "band": 4070000000,
+    "id_range": [
+      4070000000,
+      4070034457
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 11350,
+    "edges": 20691,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 6,
+    "seed_components": 1,
+    "seed_pairs_total": 15,
+    "seed_pairs_connected": 15,
+    "fix_site_ids": [
+      4070006033,
+      4070006035,
+      4070006036,
+      4070006037,
+      4070006038
+    ],
+    "test_target_ids": [
+      4070016311
+    ],
+    "seconds": 0.404
+  },
+  {
+    "instance_id": "django__django-11095",
+    "base_commit": "7d49ad76562e8c0597a0eb66046ab423b12888d8",
+    "band": 4080000000,
+    "id_range": [
+      4080000000,
+      4080034451
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 11267,
+    "edges": 18209,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4080000428,
+      4080000444
+    ],
+    "test_target_ids": [
+      4080018939
+    ],
+    "seconds": 0.399
+  },
+  {
+    "instance_id": "django__django-11099",
+    "base_commit": "d26b2424437dabeeca94d7900b37d2df4410da0c",
+    "band": 4090000000,
+    "id_range": [
+      4090000000,
+      4090034409
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 13024,
+    "edges": 18202,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [],
+    "test_target_ids": [
+      4090013746,
+      4090013745,
+      4090013735
+    ],
+    "seconds": 0.402
+  },
+  {
+    "instance_id": "django__django-11119",
+    "base_commit": "d4df5e1b0b1c643fe0fc521add0236764ec8e92a",
+    "band": 4100000000,
+    "id_range": [
+      4100000000,
+      4100034418
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 8501,
+    "edges": 11622,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4100008656
+    ],
+    "test_target_ids": [
+      4100031667
+    ],
+    "seconds": 0.367
+  },
+  {
+    "instance_id": "django__django-11133",
+    "base_commit": "879cc3da6249e920b8d54518a0ae06de835d7373",
+    "band": 4110000000,
+    "id_range": [
+      4110000000,
+      4110034425
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 7834,
+    "edges": 11542,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4110008193
+    ],
+    "test_target_ids": [
+      4110020559
+    ],
+    "seconds": 0.403
+  },
+  {
+    "instance_id": "django__django-11138",
+    "base_commit": "c84b91b7603e488f7171fdff8f08368ef3d6b856",
+    "band": 4120000000,
+    "id_range": [
+      4120000000,
+      4120034393
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 2315,
+    "edges": 4165,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 3,
+    "seeds": 16,
+    "seed_components": 1,
+    "seed_pairs_total": 120,
+    "seed_pairs_connected": 120,
+    "fix_site_ids": [
+      4120004935,
+      4120005083,
+      4120005084,
+      4120005085,
+      4120005251,
+      4120005267,
+      4120005270,
+      4120005271,
+      4120005272,
+      4120005273,
+      4120005320,
+      4120005321,
+      4120005322,
+      4120005323,
+      4120005324
+    ],
+    "test_target_ids": [
+      4120032732
+    ],
+    "seconds": 0.348
+  },
+  {
+    "instance_id": "django__django-11141",
+    "base_commit": "5d9cf79baf07fc4aed7ad1b06990532a65378155",
+    "band": 4130000000,
+    "id_range": [
+      4130000000,
+      4130035201
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 5779,
+    "edges": 8800,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 4,
+    "seeds": 1,
+    "seed_components": 1,
+    "seed_pairs_total": 0,
+    "seed_pairs_connected": 0,
+    "fix_site_ids": [
+      4130005593
+    ],
+    "test_target_ids": [],
+    "seconds": 0.366
+  },
+  {
+    "instance_id": "django__django-11149",
+    "base_commit": "e245046bb6e8b32360aa48b8a41fb7050f0fc730",
+    "band": 4140000000,
+    "id_range": [
+      4140000000,
+      4140034434
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 5195,
+    "edges": 7839,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 3,
+    "seeds": 6,
+    "seed_components": 1,
+    "seed_pairs_total": 15,
+    "seed_pairs_connected": 15,
+    "fix_site_ids": [
+      4140000524,
+      4140000525,
+      4140000526,
+      4140000527
+    ],
+    "test_target_ids": [
+      4140011068,
+      4140011072
+    ],
+    "seconds": 0.35
+  },
+  {
+    "instance_id": "django__django-11163",
+    "base_commit": "e6588aa4e793b7f56f4cadbfa155b581e0efc59a",
+    "band": 4150000000,
+    "id_range": [
+      4150000000,
+      4150034436
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10318,
+    "edges": 18035,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4150007823
+    ],
+    "test_target_ids": [
+      4150024751
+    ],
+    "seconds": 0.406
+  },
+  {
+    "instance_id": "django__django-11179",
+    "base_commit": "19fc6376ce67d01ca37a91ef2f55ef769f50513a",
+    "band": 4160000000,
+    "id_range": [
+      4160000000,
+      4160034447
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 12038,
+    "edges": 22294,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4160006038
+    ],
+    "test_target_ids": [
+      4160016313
+    ],
+    "seconds": 0.431
+  },
+  {
+    "instance_id": "django__django-11206",
+    "base_commit": "571ab44e8a8936014c22e7eebe4948d9611fd7ce",
+    "band": 4170000000,
+    "id_range": [
+      4170000000,
+      4170034448
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 11773,
+    "edges": 18223,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4170009869
+    ],
+    "test_target_ids": [
+      4170033907,
+      4170033908
+    ],
+    "seconds": 0.43
+  },
+  {
+    "instance_id": "django__django-11211",
+    "base_commit": "ba726067604ce5a8ca3919edf653496722b433ab",
+    "band": 4180000000,
+    "id_range": [
+      4180000000,
+      4180034445
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 8629,
+    "edges": 11804,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4180006490
+    ],
+    "test_target_ids": [
+      4180027260
+    ],
+    "seconds": 0.369
+  },
+  {
+    "instance_id": "django__django-11239",
+    "base_commit": "d87bd29c4f8dfcdf3f4a4eb8340e6770a2416fe3",
+    "band": 4190000000,
+    "id_range": [
+      4190000000,
+      4190034460
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 8301,
+    "edges": 11256,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4190005173,
+      4190005174
+    ],
+    "test_target_ids": [
+      4190016046
+    ],
+    "seconds": 0.381
+  },
+  {
+    "instance_id": "django__django-11265",
+    "base_commit": "21aa2a5e785eef1f47beb1c3760fdd7d8915ae09",
+    "band": 4200000000,
+    "id_range": [
+      4200000000,
+      4200034503
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 2785,
+    "edges": 6039,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 3,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4200007442,
+      4200007470
+    ],
+    "test_target_ids": [
+      4200017219
+    ],
+    "seconds": 0.349
+  },
+  {
+    "instance_id": "django__django-11276",
+    "base_commit": "28d5262fa3315690395f04e3619ed554dbaf725b",
+    "band": 4210000000,
+    "id_range": [
+      4210000000,
+      4210034474
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 6124,
+    "edges": 10642,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 3,
+    "seeds": 27,
+    "seed_components": 1,
+    "seed_pairs_total": 351,
+    "seed_pairs_connected": 351,
+    "fix_site_ids": [
+      4210009769,
+      4210009787,
+      4210009788,
+      4210009790,
+      4210009791
+    ],
+    "test_target_ids": [
+      4210030379,
+      4210013303,
+      4210030622,
+      4210030639,
+      4210030097,
+      4210030524,
+      4210030611,
+      4210030616,
+      4210018651,
+      4210031486,
+      4210024731,
+      4210024732,
+      4210024737,
+      4210024747,
+      4210034235,
+      4210033707,
+      4210033713,
+      4210018040,
+      4210018156,
+      4210010777,
+      4210034284,
+      4210034301
+    ],
+    "seconds": 0.363
+  },
+  {
+    "instance_id": "django__django-11292",
+    "base_commit": "eb16c7260e573ec513d84cb586d96bdf508f3173",
+    "band": 4220000000,
+    "id_range": [
+      4220000000,
+      4220034484
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 8653,
+    "edges": 16514,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 4,
+    "seed_components": 1,
+    "seed_pairs_total": 6,
+    "seed_pairs_connected": 6,
+    "fix_site_ids": [
+      4220004092,
+      4220004093,
+      4220004096
+    ],
+    "test_target_ids": [
+      4220033351
+    ],
+    "seconds": 0.403
+  },
+  {
+    "instance_id": "django__django-11299",
+    "base_commit": "6866c91b638de5368c18713fa851bfe56253ea55",
+    "band": 4230000000,
+    "id_range": [
+      4230000000,
+      4230034486
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 12737,
+    "edges": 20944,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4230007432
+    ],
+    "test_target_ids": [
+      4230027750
+    ],
+    "seconds": 0.419
+  },
+  {
+    "instance_id": "django__django-11333",
+    "base_commit": "55b68de643b5c2d5f0a8ea7587ab3b2966021ccc",
+    "band": 4240000000,
+    "id_range": [
+      4240000000,
+      4240034783
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10555,
+    "edges": 15182,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4240009339,
+      4240009373
+    ],
+    "test_target_ids": [
+      4240033333
+    ],
+    "seconds": 0.411
+  },
+  {
+    "instance_id": "django__django-11400",
+    "base_commit": "1f8382d34d54061eddc41df6994e20ee38c60907",
+    "band": 4250000000,
+    "id_range": [
+      4250000000,
+      4250034920
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 3331,
+    "edges": 5672,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 3,
+    "seeds": 8,
+    "seed_components": 1,
+    "seed_pairs_total": 28,
+    "seed_pairs_connected": 28,
+    "fix_site_ids": [
+      4250000321,
+      4250000322,
+      4250006384,
+      4250006843,
+      4250006844
+    ],
+    "test_target_ids": [
+      4250024737,
+      4250024739,
+      4250010984
+    ],
+    "seconds": 0.36
+  },
+  {
+    "instance_id": "django__django-11433",
+    "base_commit": "21b1d239125f1228e579b1ce8d94d4d5feadd2a6",
+    "band": 4260000000,
+    "id_range": [
+      4260000000,
+      4260034610
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10079,
+    "edges": 15729,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4260007832
+    ],
+    "test_target_ids": [
+      4260024746
+    ],
+    "seconds": 0.388
+  },
+  {
+    "instance_id": "django__django-11451",
+    "base_commit": "e065b293878b1e3ea56655aa9d33e87576cd77ff",
+    "band": 4270000000,
+    "id_range": [
+      4270000000,
+      4270034651
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 8836,
+    "edges": 16290,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4270000827
+    ],
+    "test_target_ids": [
+      4270013157,
+      4270013151
+    ],
+    "seconds": 0.415
+  },
+  {
+    "instance_id": "django__django-11477",
+    "base_commit": "e28671187903e6aca2428374fdd504fca3032aee",
+    "band": 4280000000,
+    "id_range": [
+      4280000000,
+      4280034743
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 11240,
+    "edges": 16900,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 4,
+    "seed_components": 1,
+    "seed_pairs_total": 6,
+    "seed_pairs_connected": 6,
+    "fix_site_ids": [
+      4280009381
+    ],
+    "test_target_ids": [
+      4280033312,
+      4280033310,
+      4280020889
+    ],
+    "seconds": 0.396
+  },
+  {
+    "instance_id": "django__django-11490",
+    "base_commit": "a7038adbd02c916315b16939b835f021c2ee8880",
+    "band": 4290000000,
+    "id_range": [
+      4290000000,
+      4290034617
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 2182,
+    "edges": 3783,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 3,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4290007331
+    ],
+    "test_target_ids": [
+      4290027883
+    ],
+    "seconds": 0.372
+  },
+  {
+    "instance_id": "django__django-11532",
+    "base_commit": "a5308514fb4bc5086c9a16a8a24a945eeebb073c",
+    "band": 4300000000,
+    "id_range": [
+      4300000000,
+      4300034775
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 5338,
+    "edges": 8816,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 3,
+    "seeds": 7,
+    "seed_components": 1,
+    "seed_pairs_total": 21,
+    "seed_pairs_connected": 21,
+    "fix_site_ids": [
+      4300004058,
+      4300004550,
+      4300004554,
+      4300009724,
+      4300009842,
+      4300009844
+    ],
+    "test_target_ids": [
+      4300022422
+    ],
+    "seconds": 0.362
+  },
+  {
+    "instance_id": "django__django-11551",
+    "base_commit": "7991111af12056ec9a856f35935d273526338c1f",
+    "band": 4310000000,
+    "id_range": [
+      4310000000,
+      4310034830
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 11404,
+    "edges": 17352,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 5,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4310000265
+    ],
+    "test_target_ids": [
+      4310025993
+    ],
+    "seconds": 0.404
+  },
+  {
+    "instance_id": "django__django-11555",
+    "base_commit": "8dd5877f58f84f2b11126afbd0813e24545919ed",
+    "band": 4320000000,
+    "id_range": [
+      4320000000,
+      4320034786
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 2369,
+    "edges": 4902,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 3,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4320007365
+    ],
+    "test_target_ids": [
+      4320026741
+    ],
+    "seconds": 0.374
+  },
+  {
+    "instance_id": "django__django-11603",
+    "base_commit": "f618e033acd37d59b536d6e6126e6c5be18037f6",
+    "band": 4330000000,
+    "id_range": [
+      4330000000,
+      4330034895
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10190,
+    "edges": 17454,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [],
+    "test_target_ids": [
+      4330012849,
+      4330012831
+    ],
+    "seconds": 0.386
+  },
+  {
+    "instance_id": "django__django-11728",
+    "base_commit": "05457817647368be4b019314fcc655445a5b4c0c",
+    "band": 4340000000,
+    "id_range": [
+      4340000000,
+      4340035065
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10452,
+    "edges": 14640,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 4,
+    "seed_components": 1,
+    "seed_pairs_total": 6,
+    "seed_pairs_connected": 6,
+    "fix_site_ids": [
+      4340000768,
+      4340000769
+    ],
+    "test_target_ids": [
+      4340010924,
+      4340010915
+    ],
+    "seconds": 0.406
+  },
+  {
+    "instance_id": "django__django-11734",
+    "base_commit": "999891bd80b3d02dd916731a7a239e1036174885",
+    "band": 4350000000,
+    "id_range": [
+      4350000000,
+      4350035013
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 4750,
+    "edges": 8398,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 3,
+    "seeds": 5,
+    "seed_components": 1,
+    "seed_pairs_total": 10,
+    "seed_pairs_connected": 10,
+    "fix_site_ids": [
+      4350006585,
+      4350006586,
+      4350006850,
+      4350007548
+    ],
+    "test_target_ids": [
+      4350028511
+    ],
+    "seconds": 0.363
+  },
+  {
+    "instance_id": "django__django-11740",
+    "base_commit": "003bb34b218adb23d1a7e67932a6ba9b3c4dcc81",
+    "band": 4360000000,
+    "id_range": [
+      4360000000,
+      4360035063
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10140,
+    "edges": 16660,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4360005515
+    ],
+    "test_target_ids": [
+      4360023564
+    ],
+    "seconds": 0.392
+  },
+  {
+    "instance_id": "django__django-11749",
+    "base_commit": "350123f38c2b6217c38d70bfbd924a9ba3df1289",
+    "band": 4370000000,
+    "id_range": [
+      4370000000,
+      4370035145
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 7460,
+    "edges": 14217,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 3,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4370004128
+    ],
+    "test_target_ids": [
+      4370033992
+    ],
+    "seconds": 0.404
+  },
+  {
+    "instance_id": "django__django-11790",
+    "base_commit": "b1d6b35e146aea83b171c1b921178bbaae2795ed",
+    "band": 4380000000,
+    "id_range": [
+      4380000000,
+      4380035072
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 3745,
+    "edges": 5341,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 3,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4380000916
+    ],
+    "test_target_ids": [
+      4380013527,
+      4380013526
+    ],
+    "seconds": 0.353
+  },
+  {
+    "instance_id": "django__django-11815",
+    "base_commit": "e02f67ef2d03d48128e7a118bf75f0418e24e8ac",
+    "band": 4390000000,
+    "id_range": [
+      4390000000,
+      4390035183
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 13389,
+    "edges": 23783,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4390005880
+    ],
+    "test_target_ids": [
+      4390024430,
+      4390024414
+    ],
+    "seconds": 0.438
+  },
+  {
+    "instance_id": "django__django-11820",
+    "base_commit": "c2678e49759e5c4c329bff0eeca2886267005d21",
+    "band": 4400000000,
+    "id_range": [
+      4400000000,
+      4400035176
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 1648,
+    "edges": 2362,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 3,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4400006071
+    ],
+    "test_target_ids": [
+      4400021730,
+      4400021737
+    ],
+    "seconds": 0.365
+  },
+  {
+    "instance_id": "django__django-11848",
+    "base_commit": "f0adf3b9b7a19cdee05368ff0c0c2d087f011180",
+    "band": 4410000000,
+    "id_range": [
+      4410000000,
+      4410035178
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 11851,
+    "edges": 21444,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4410009938
+    ],
+    "test_target_ids": [
+      4410034483,
+      4410034485
+    ],
+    "seconds": 0.407
+  },
+  {
+    "instance_id": "django__django-11880",
+    "base_commit": "06909fe084f87a65459a83bd69d7cdbe4fce9a7c",
+    "band": 4420000000,
+    "id_range": [
+      4420000000,
+      4420035197
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10286,
+    "edges": 14349,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4420007770
+    ],
+    "test_target_ids": [
+      4420018656
+    ],
+    "seconds": 0.415
+  },
+  {
+    "instance_id": "django__django-11885",
+    "base_commit": "04ac9b45a34440fa447feb6ae934687aacbfc5f4",
+    "band": 4430000000,
+    "id_range": [
+      4430000000,
+      4430035145
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 4835,
+    "edges": 8105,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 3,
+    "seeds": 11,
+    "seed_components": 1,
+    "seed_pairs_total": 55,
+    "seed_pairs_connected": 55,
+    "fix_site_ids": [
+      4430000650,
+      4430006119,
+      4430006120,
+      4430006121,
+      4430006123,
+      4430006124,
+      4430006125,
+      4430006126,
+      4430006127,
+      4430006128
+    ],
+    "test_target_ids": [
+      4430016687
+    ],
+    "seconds": 0.352
+  },
+  {
+    "instance_id": "django__django-11951",
+    "base_commit": "312049091288dbba2299de8d07ea3e3311ed7238",
+    "band": 4440000000,
+    "id_range": [
+      4440000000,
+      4440035193
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 3689,
+    "edges": 8051,
+    "truncated": true,
+    "node_budget_hit": false,
+    "edge_budget_hit": true,
+    "hops_completed": 3,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4440007332
+    ],
+    "test_target_ids": [
+      4440014723
+    ],
+    "seconds": 0.371
+  },
+  {
+    "instance_id": "django__django-11964",
+    "base_commit": "fc2b1cc926e34041953738e58fa6ad3053059b22",
+    "band": 4450000000,
+    "id_range": [
+      4450000000,
+      4450035274
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 8465,
+    "edges": 11489,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [],
+    "test_target_ids": [
+      4450024541,
+      4450024531
+    ],
+    "seconds": 0.383
+  },
+  {
+    "instance_id": "django__django-11999",
+    "base_commit": "84633905273fc916e3d17883810d9969c03f73c2",
+    "band": 4460000000,
+    "id_range": [
+      4460000000,
+      4460035301
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10646,
+    "edges": 15245,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4460006410,
+      4460006411
+    ],
+    "test_target_ids": [
+      4460024978
+    ],
+    "seconds": 0.391
+  },
+  {
+    "instance_id": "django__django-12039",
+    "base_commit": "58c1acb1d6054dfec29d0f30b1033bae6ef62aec",
+    "band": 4470000000,
+    "id_range": [
+      4470000000,
+      4470035354
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10901,
+    "edges": 17410,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 4,
+    "seed_components": 1,
+    "seed_pairs_total": 6,
+    "seed_pairs_connected": 6,
+    "fix_site_ids": [
+      4470004906,
+      4470004907,
+      4470004913
+    ],
+    "test_target_ids": [
+      4470021507
+    ],
+    "seconds": 0.437
+  },
+  {
+    "instance_id": "django__django-12050",
+    "base_commit": "b93a0e34d9b9b99d41103782b7e7aeabf47517e3",
+    "band": 4480000000,
+    "id_range": [
+      4480000000,
+      4480035364
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 10372,
+    "edges": 16708,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 2,
+    "seed_components": 1,
+    "seed_pairs_total": 1,
+    "seed_pairs_connected": 1,
+    "fix_site_ids": [
+      4480007566
+    ],
+    "test_target_ids": [
+      4480028523
+    ],
+    "seconds": 0.412
+  },
+  {
+    "instance_id": "django__django-12125",
+    "base_commit": "89d41cba392b759732ba9f1db4ff29ed47da6a56",
+    "band": 4490000000,
+    "id_range": [
+      4490000000,
+      4490035440
+    ],
+    "hops": 6,
+    "node_budget": 16000,
+    "edge_budget": 24000,
+    "nodes": 8691,
+    "edges": 11963,
+    "truncated": true,
+    "node_budget_hit": true,
+    "edge_budget_hit": false,
+    "hops_completed": 4,
+    "seeds": 3,
+    "seed_components": 1,
+    "seed_pairs_total": 3,
+    "seed_pairs_connected": 3,
+    "fix_site_ids": [
+      4490005932
+    ],
+    "test_target_ids": [
+      4490024577,
+      4490024565
+    ],
+    "seconds": 0.408
+  }
+]
