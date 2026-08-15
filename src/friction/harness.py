@@ -1058,6 +1058,7 @@ def build_arm_rows(path_stats: dict, manifest: list[dict],
                 "paths": int(a.get("paths") or 0),
                 "n_fix": len(marm.get("fix_site_ids") or []),
                 "n_test": len(marm.get("test_target_ids") or []),
+                "error": str(a.get("error") or ""),
             }
         rows.append(row)
     return rows
@@ -1115,6 +1116,21 @@ def evaluate_arms(rows: list[dict], failed_by_id: dict[str, bool],
     arm A's answered set (the friction-defined headline set) so friction and the
     cheap predictors share instances. Nothing is tuned."""
     comparable = [r for r in rows if r["comparable"]]
+
+    # Arm-B unanswered split among the comparable cohort (Finding 3): the failures
+    # are NOT all timeouts — one is a frontier admission-control memory-pool OOM.
+    # Classified from the committed error strings, never hand-counted.
+    b_unanswered = [r for r in comparable if not r["arm_b"]["answered"]]
+    b_timeouts = sum(1 for r in b_unanswered
+                     if _classify_error(r["arm_b"].get("error", "")) == "timeout")
+    b_ooms = sum(1 for r in b_unanswered
+                 if _classify_error(r["arm_b"].get("error", "")) == "oom")
+    arm_b_unanswered = {
+        "total": len(b_unanswered),
+        "timeouts": b_timeouts,
+        "ooms": b_ooms,
+        "other": len(b_unanswered) - b_timeouts - b_ooms,
+    }
 
     def _lab(ids: list[str]) -> list[bool]:
         return [bool(failed_by_id.get(i, False)) for i in ids]
@@ -1187,9 +1203,12 @@ def evaluate_arms(rows: list[dict], failed_by_id: dict[str, bool],
                                         _lab(headline_ids), n_boot=n_boot, seed=seed)
     spans_zero = not (lo == lo and hi == hi) or (lo <= 0.0 <= hi)
     width = (hi - lo) if (lo == lo and hi == hi) else float("nan")
+    head_labels = _lab(headline_ids)
     q3 = {"answer": "no",   # with n this small the CI cannot exclude zero
           "point": point, "bootstrap_ci": [lo, hi], "ci_width": width,
           "n": len(headline_ids), "n_boot": n_boot,
+          "n_failed": sum(head_labels),
+          "n_resolved": len(head_labels) - sum(head_labels),
           "note": "Underpowered by roughly an order of magnitude; a real effect "
                   "below ~0.1 AUC cannot be resolved at this n."}
 
@@ -1214,6 +1233,7 @@ def evaluate_arms(rows: list[dict], failed_by_id: dict[str, bool],
         "headline_set": "arm A engine-answered, comparable cohort",
         "arm_a": arm_view["arm_a"],
         "arm_b": arm_view["arm_b"],
+        "arm_b_unanswered": arm_b_unanswered,
         "baselines_headline": base_headline,
         "baselines_comparable": base_comparable,
         "best_baseline": {"name": best_base_name, "auc": best_base_auc}
@@ -1254,6 +1274,7 @@ def write_arms_evaluation(result: dict, v1_head: dict | None = None,
     `result` (from evaluate_arms) — none is hand-entered."""
     a, b = result["arm_a"], result["arm_b"]
     bh = result["baselines_headline"]
+    bu = result["arm_b_unanswered"]
     q = result["questions"]
     q1, q2, q3 = q["arm_b_beats_arm_a"], q["beats_patch_lines"], q["n_sufficient"]
     ci = q3["bootstrap_ci"]
@@ -1293,6 +1314,23 @@ def write_arms_evaluation(result: dict, v1_head: dict | None = None,
         "local-backend generations because the store holds only ~13 instances per "
         "generation.)",
         "",
+        "**Limitation — no per-instance store-generation record.** The committed "
+        "`path_stats.json` was assembled across several wiped local-backend store "
+        "generations (the local backend holds only ~13 instances / 26 arms per "
+        "~3 GB generation), but it records **no generation tag** per instance or "
+        "arm — and no run log, measurement timestamp, or batch boundary survives in "
+        "the committed data from which one could be recovered. It therefore cannot "
+        "be verified from committed data that an instance's arm A and arm B were "
+        "measured in the *same* store generation, and answered-vs-timeout status is "
+        "exactly what selects the n = " + str(n_head) + " headline cohort, so "
+        "within-instance A-vs-B comparability is **unverified**. Mitigating "
+        "evidence: the arm-B failures are frontier admission-control OOM "
+        "(`actual 250001 exceeds limit 250000`) and traversal-stage timeouts — "
+        "density signals that reflect the type-resolved graph itself, independent "
+        "of any store bloat — and each generation was kept under 3 GB, so the "
+        "measured asymmetry is not plausibly an artifact of generation drift. No "
+        "generation tag is fabricated to paper over the gap.",
+        "",
         "## The comparison table (all AUC vs `failed`, positive class = failure)",
         "",
         f"Headline set: **{result['headline_set']}** (n = {n_head}); friction and "
@@ -1301,11 +1339,14 @@ def write_arms_evaluation(result: dict, v1_head: dict | None = None,
         "",
         "| Predictor | AUC | n | note |",
         "|---|---|---|---|",
-        f"| Friction, arm A (name-matched) | {_fmt(a['auc'])} | {a['n']} | "
+        f"| Friction, arm A (name-matched; f1/path-multiplicity only) | "
+        f"{_fmt(a['auc'])} | {a['n']} | "
         f"{a['with_paths']} of {a['n']} answered instances had >=1 bounded path |",
-        f"| Friction, arm B (type-resolved) | {_fmt(b['auc'])} | {b['n']} | "
+        f"| Friction, arm B (type-resolved; f1/path-multiplicity only) | "
+        f"{_fmt(b['auc'])} | {b['n']} | "
         f"only {b['n']} of {result['n_comparable']} comparable instances were "
-        "engine-answerable (rest timed out at 29999 ms) |",
+        f"engine-answerable ({bu['timeouts']} of the other {bu['total']} timed out "
+        f"at 29999 ms, {bu['ooms']} hit a memory-pool OOM) |",
         f"| `patch_lines` | {_fmt(bh.get('patch_lines'))} | {n_head} | scope baseline |",
         f"| `patch_files` | {_fmt(bh.get('patch_files'))} | {n_head} | scope baseline |",
         f"| `f2p_count` | {_fmt(bh.get('f2p_count'))} | {n_head} | fail-to-pass count |",
@@ -1327,13 +1368,16 @@ def write_arms_evaluation(result: dict, v1_head: dict | None = None,
     ]
     if q1["answer"] == "undetermined":
         L.append(q1["detail"] + " The type-resolved graph is denser and its "
-                 "bounded fix->test enumeration times out on all but a handful of "
-                 "instances, so at maxLen 6 the type-resolved arm is *engine-"
-                 "unanswerable at cohort scale*. That the richer graph is the one "
-                 "the engine cannot traverse is itself an honest result — but it "
-                 "means the headline arm-B-vs-arm-A comparison cannot be made on "
-                 "this hardware, and we do not manufacture one from n = "
-                 f"{b['n']}.")
+                 "bounded fix->test enumeration is engine-unanswerable on all but a "
+                 f"handful of instances: of the {bu['total']} unanswered comparable "
+                 f"instances, {bu['timeouts']} timed out at 29999 ms and "
+                 f"{bu['ooms']} hit a frontier admission-control memory-pool OOM "
+                 "(`actual 250001 exceeds limit 250000`). So at maxLen 6 the "
+                 "type-resolved arm is *engine-unanswerable at cohort scale*. That "
+                 "the richer graph is the one the engine cannot traverse is itself "
+                 "an honest result — but it means the headline arm-B-vs-arm-A "
+                 "comparison cannot be made on this hardware, and we do not "
+                 f"manufacture one from n = {b['n']}.")
     else:
         L.append(f"arm A AUC {_fmt(q1.get('arm_a_auc'))} vs arm B AUC "
                  f"{_fmt(q1.get('arm_b_auc'))}.")
@@ -1342,28 +1386,43 @@ def write_arms_evaluation(result: dict, v1_head: dict | None = None,
         f"**2. Does either beat `patch_lines`?  {q2['answer'].upper()}.** Friction "
         f"arm A scores AUC {_fmt(q2['friction_armA_auc'])} against `patch_lines` "
         f"{_fmt(q2['patch_lines_auc'])} on the same {n_head} instances "
-        f"(difference {_fmt(q2['diff'])}). Structure adds nothing over raw patch "
-        "scope; the cheapest possible predictor is at least as good. Arm B cannot "
-        "be entered into this comparison (question 1).",
+        f"(difference {_fmt(q2['diff'])}). Path multiplicity (friction f1 — the "
+        "only component reconstructable from the cached counts) adds nothing over "
+        "raw patch scope; the cheapest possible predictor is at least as good. Arm "
+        "B cannot be entered into this comparison (question 1).",
         "",
         f"**3. Is n big enough to say anything?  NO.** Bootstrap 95% CI on "
         f"AUC(friction arm A) - AUC(`patch_lines`) over the {q3['n']} shared "
-        f"instances is **[{_fmt(ci[0])}, {_fmt(ci[1])}]** (point {_fmt(q3['point'])}, "
+        f"instances ({q3['n_failed']} failed / {q3['n_resolved']} resolved — the "
+        "class split is not degenerate) is "
+        f"**[{_fmt(ci[0])}, {_fmt(ci[1])}]** (point {_fmt(q3['point'])}, "
         f"{q3['n_boot']} resamples). The interval spans zero and most of the "
         "achievable range. {}".format(q3["note"]),
         "",
         "## Verdict",
         "",
-        "**NO-GO on the prediction thesis.** On a type-resolved substrate, friction "
-        f"(arm A) does not beat `patch_lines` (AUC {_fmt(a['auc'])} vs "
-        f"{_fmt(bh.get('patch_lines'))}), the type-resolved arm B is not engine-"
-        "answerable at cohort scale, and the sample is underpowered by roughly an "
-        "order of magnitude. The v1 null is retracted, and the honest replacement "
-        "is not a positive result. The *supporting* structural finding — that a "
-        "name-matched graph's edges have a precision ceiling of 0.746 against the "
-        "type-resolved graph (Task 6, `docs/graph-delta.md`) — stands on its own as "
-        "the measurement of what name matching costs; it is not rescued into a "
-        "prediction claim it cannot support.",
+        "**NO-GO on the prediction thesis.** Read the scope precisely: what was "
+        "actually tested on this substrate is **path multiplicity — friction "
+        "component f1 alone**. Only f1 is reconstructable from the committed "
+        "`path_stats.json`, which caches per-arm path COUNTS, not the path node "
+        "lists that f2-f6 (mean length, distinct intermediates, convergence, cyclic "
+        "pressure, and the fan-in component) require; **f2-f6 were not computed on "
+        "this substrate**, and with equal weights the friction score is monotone in "
+        "f1, so AUC(friction) == AUC(f1). On that basis: **path multiplicity does "
+        f"not beat patch scope** (arm A AUC {_fmt(a['auc'])} vs `patch_lines` "
+        f"{_fmt(bh.get('patch_lines'))} on the same {n_head} instances), the "
+        f"type-resolved arm B is not engine-answerable at cohort scale (only "
+        f"{b['n']} of {result['n_comparable']} comparable instances answered; "
+        f"{bu['timeouts']} timed out and {bu['ooms']} hit a memory-pool OOM), and "
+        f"**n = {n_head} is too small to resolve anything** (the bootstrap CI spans "
+        "zero and most of the achievable range). This is *not* a demonstration that "
+        "graph structure fails to predict failure — the multi-component structure "
+        "(f2-f6) was never measured here. The v1 null is retracted, and the honest "
+        "replacement is not a positive result. The *supporting* structural finding "
+        "— that a name-matched graph's edges have a precision ceiling of 0.746 "
+        "against the type-resolved graph (Task 6, `docs/graph-delta.md`) — stands "
+        "on its own as the measurement of what name matching costs; it is not "
+        "rescued into a prediction claim it cannot support.",
         "",
         "## Label contamination — a limit of the ground truth, not the metric",
         "",
