@@ -167,3 +167,125 @@ def test_parse_offenders_reads_committed_report_verbatim():
     assert rows[0] == ("extend", 139)
     assert d["lower"] == 125
     assert d["cursor"] == 54
+
+
+# --- prune.png (the money shot) --------------------------------------------
+
+def test_render_prune_writes_a_png(tmp_path):
+    out = viz.render_prune(A_EDGES, ROLES, tmp_path / "prune.png",
+                           "demo instance", COUNTS)
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_render_prune_empty_input_still_writes_a_png(tmp_path):
+    out = viz.render_prune([], {}, tmp_path / "prune_empty.png", "empty",
+                           {"n_a_edges": 0, "n_confirmed": 0, "n_unconfirmed": 0})
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_pruned_edge_set_is_strictly_smaller_than_full():
+    # The confirmed (pruned) graph the money shot draws on the right must be a
+    # strict subset of the full name-matched graph on the left.
+    full = viz.arm_a_graph(A_EDGES)
+    pruned = viz.confirmed_subgraph(full)
+    assert pruned.number_of_edges() < full.number_of_edges()
+
+
+# --- direction.png ----------------------------------------------------------
+
+def test_render_direction_writes_a_png(tmp_path):
+    bars = [("fix→test", 0.0, "backwards"), ("test→fix", 55.0, "natural"),
+            ("undirected", 98.0, "broad")]
+    out = viz.render_direction(bars, tmp_path / "direction.png", n=44)
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_render_direction_empty_input_still_writes_a_png(tmp_path):
+    out = viz.render_direction([], tmp_path / "direction_empty.png", n=0)
+    assert out.exists() and out.stat().st_size > 0
+
+
+# --- latency.png ------------------------------------------------------------
+
+def test_render_latency_writes_a_png(tmp_path):
+    rows = [(1, 4), (2, 2), (3, 4), (4, 3), (5, 7), (6, 12)]
+    out = viz.render_latency(rows, 30000, tmp_path / "latency.png")
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_render_latency_empty_input_still_writes_a_png(tmp_path):
+    out = viz.render_latency([], 30000, tmp_path / "latency_empty.png")
+    assert out.exists() and out.stat().st_size > 0
+
+
+# --- demo.html --------------------------------------------------------------
+
+_DEMO_GRAPH = {
+    "instance": "django__django-11490",
+    "depth": 2,
+    "fix_names": ["get_combinator_sql"],
+    "nodes": [
+        {"id": "m::get_combinator_sql", "label": "get_combinator_sql", "role": "fix"},
+        {"id": "m::extend", "label": "extend", "role": "intermediate"},
+        {"id": "m::get_order_by", "label": "get_order_by", "role": "intermediate"},
+    ],
+    "edges": [
+        {"id": "a0", "source": "m::get_combinator_sql", "target": "m::get_order_by",
+         "arm": "a", "confirmed": True},
+        {"id": "a1", "source": "m::get_combinator_sql", "target": "m::extend",
+         "arm": "a", "confirmed": False},
+        {"id": "b0", "source": "m::get_combinator_sql", "target": "m::get_order_by",
+         "arm": "b", "confirmed": True},
+    ],
+    "n_a_edges": 2, "n_confirmed": 1, "n_unconfirmed": 1, "n_b_edges": 1,
+}
+
+
+def test_render_demo_html_is_written_and_self_contained(tmp_path):
+    out = viz.render_demo_html(_DEMO_GRAPH, tmp_path / "demo.html")
+    assert out.exists()
+    html = out.read_text(encoding="utf-8")
+    # Vendored cytoscape, inlined — never a CDN URL.
+    assert "cytoscape" in html.lower()
+    assert 'version="3.30.2"' in html  # the real library, not a stub
+    for cdn in ("unpkg.com", "cdnjs.cloudflare", "jsdelivr.net"):
+        assert cdn not in html
+    # No network fetches at all.
+    assert "fetch(" not in html
+
+
+def test_demo_html_embeds_the_inline_graph_json(tmp_path):
+    out = viz.render_demo_html(_DEMO_GRAPH, tmp_path / "demo.html")
+    html = out.read_text(encoding="utf-8")
+    assert "const DATA =" in html
+    # The real node identities are embedded, not fetched.
+    assert "get_combinator_sql" in html
+    assert '"arm":"a"' in html or '"arm": "a"' in html
+
+
+def test_demo_html_carries_the_ceiling_caveat(tmp_path):
+    out = viz.render_demo_html(_DEMO_GRAPH, tmp_path / "demo.html")
+    html = out.read_text(encoding="utf-8")
+    assert "CEILING" in html
+    assert "cursor" in html
+    assert "0.746" in html
+
+
+def test_render_demo_html_without_vendor_still_writes(tmp_path):
+    # A partial checkout missing the vendored lib must not crash the generator.
+    out = viz.render_demo_html(_DEMO_GRAPH, tmp_path / "demo.html",
+                               vendor_js=tmp_path / "absent.js")
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_build_demo_graph_edges_split_by_arm():
+    # Uses the committed shipped/instances arms data via the real join.
+    g = viz.build_demo_graph("django__django-11490", 2)
+    assert g["n_a_edges"] > 0
+    assert g["n_unconfirmed"] > 0
+    arms = {e["arm"] for e in g["edges"]}
+    assert arms == {"a", "b"}
+    # Every node referenced by an edge is present in the node list.
+    ids = {n["id"] for n in g["nodes"]}
+    for e in g["edges"]:
+        assert e["source"] in ids and e["target"] in ids
