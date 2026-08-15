@@ -50,7 +50,27 @@ def compare(arm_a, arm_b) -> Delta:
     )
 
 
-def write_report(delta: Delta, extra: dict, path: Path) -> None:
+def compare_joined(arm_a, arm_b, prefix, src_scope):
+    """Join the two arms into a shared node space, then run :func:`compare`.
+
+    ``compare`` compares raw ``(src, dst)`` strings and so is meaningless across
+    arm A's tree-sitter qualnames and arm B's SCIP canonical forms directly.
+    This wrapper first maps both arms into one ``scope::leaf`` space via
+    :func:`friction.identity.joined_edge_sets`, then feeds the comparable edge
+    sets to the unchanged ``compare``. Returns ``(Delta, join_stats)``.
+    """
+    from friction.identity import joined_edge_sets
+    from friction.namematch.graph import NameEdge
+    from friction.scip.extract import CallEdge
+
+    a_set, b_set, stats = joined_edge_sets(arm_a, arm_b, prefix, src_scope)
+    a_edges = [NameEdge(s, d, 1, "joined") for s, d in a_set]
+    b_edges = [CallEdge(s, d, False, 1) for s, d in b_set]
+    return compare(a_edges, b_edges), stats
+
+
+def write_report(delta: Delta, extra: dict, path: Path,
+                 body_sections: list[str] | None = None) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
@@ -87,6 +107,9 @@ def write_report(delta: Delta, extra: dict, path: Path) -> None:
         "of the bias is known and stated; the exact split is not claimed.",
         "",
     ]
+    for section in (body_sections or ()):
+        lines.append(section.rstrip("\n"))
+        lines.append("")
     for k, v in extra.items():
         lines.append(f"- {k}: {v}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
