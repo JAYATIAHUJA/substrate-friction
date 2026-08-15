@@ -57,6 +57,20 @@ def test_covers_identity_loses_class_qualification_for_methods():
     assert scip != cov
 
 
+def test_strict_identity_matches_a_qualified_class_method():
+    # Once the tracer class-qualifies co_name (Class.method), the SAME strict
+    # covers_identity join that a module-level function used now lands a method
+    # on its SCIP symbol -- this is the identity fix the RED verdict hinged on.
+    from friction import identity
+    prefix = "data.repos.django."
+    scip = identity.normalize_scip(
+        "data.repos.django.django.core.validators::URLValidator#__call__().",
+        prefix)
+    cov = covers3.covers_identity(
+        "django/core/validators.py::URLValidator.__call__")
+    assert scip == cov == "django.core.validators.URLValidator::__call__"
+
+
 def test_lax_join_recovers_a_class_method_the_strict_join_drops(tmp_path):
     # one arm B class method + one module-level function
     nodes = tmp_path / "nodes.ndjson"

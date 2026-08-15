@@ -14,6 +14,19 @@ Each django version needs its own interpreter (django 3.0 will not import on
 3.12), so the tracer is emitted as a script and run under a uv-provisioned
 guest.
 
+IDENTITY (owned for correctness).  A recorded node must carry enough of the
+symbol to rejoin arm B, whose nodes are SCIP class-qualified
+(``module::Class#method()``).  ``co_name`` alone is the BARE method name
+(``save``, ``__call__``) with no class, so a *method* can never rejoin its
+symbol -- an earlier run measured only 69/23,043 (0.3%) of COVERS edges mapping
+under the strict join for exactly this reason.  The fix is
+:func:`qualified_name`: prefer ``co_qualname`` (3.11+, ``Class.method``
+directly); otherwise reconstruct the class from ``self`` / ``cls`` in the
+frame's locals; a genuinely module-level function keeps its bare name.  The
+tracer emits ``<relpath>::<Class>.<name>`` when a class is found and
+``<relpath>::<name>`` when not, and :mod:`friction.covers3` joins that form
+against the SCIP shape.
+
 DEVIATION FROM THE PLAN (owned for correctness).  The plan's tracer scoped the
 trace to files under ``django/`` only.  Django's own test suite lives under a
 sibling ``tests/`` tree, so with a ``django/``-only scope NO recorded edge ever
@@ -42,13 +55,31 @@ ROOT = os.path.abspath("..")
 SCOPES = tuple(os.path.join(ROOT, d) + os.sep for d in {scopes!r})
 edges, stack = set(), []
 
+def _qual(c, frame):
+    # Class-qualify the bare co_name so a method can rejoin its SCIP symbol.
+    q = getattr(c, "co_qualname", None)
+    if q:
+        return q
+    name = c.co_name
+    loc = frame.f_locals
+    s = loc.get("self")
+    if s is not None:
+        try:
+            return type(s).__name__ + "." + name
+        except Exception:
+            return name
+    cl = loc.get("cls")
+    if isinstance(cl, type):
+        return cl.__name__ + "." + name
+    return name
+
 def tracer(frame, event, arg):
     if event != "call":
         return None
     c = frame.f_code
     if not c.co_filename.startswith(SCOPES):
         return None
-    callee = os.path.relpath(c.co_filename, ROOT) + "::" + c.co_name
+    callee = os.path.relpath(c.co_filename, ROOT) + "::" + _qual(c, frame)
     if stack:
         edges.add((stack[-1], callee))
     stack.append(callee)
@@ -75,6 +106,35 @@ json.dump({{"edges": sorted(edges),
            "seconds": round(time.perf_counter() - t0, 2)}},
           open({out!r}, "w"))
 '''
+
+
+def qualified_name(code, frame_locals) -> str:
+    """Class-qualify a code object's name so a method can rejoin its SCIP symbol.
+
+    This is the host-testable twin of the ``_qual`` helper embedded in the guest
+    tracer (they must stay in lock-step). ``co_name`` alone is the bare method
+    name with no class; SCIP nodes are class-qualified, so a method traced by
+    bare name never rejoins. Resolution order:
+
+      1. ``co_qualname`` (Python 3.11+) already reads ``Class.method`` -- use it.
+      2. else reconstruct from the frame: ``self`` gives ``type(self).__name__``,
+         a classmethod's ``cls`` gives the class name directly.
+      3. else the function is module-level and the bare name is already correct.
+    """
+    qual = getattr(code, "co_qualname", None)
+    if qual:
+        return qual
+    name = code.co_name
+    self_obj = frame_locals.get("self")
+    if self_obj is not None:
+        try:
+            return f"{type(self_obj).__name__}.{name}"
+        except Exception:  # noqa: BLE001 - a broken __class__ must not kill the trace
+            return name
+    cls = frame_locals.get("cls")
+    if isinstance(cls, type):
+        return f"{cls.__name__}.{name}"
+    return name
 
 
 @dataclass(frozen=True)

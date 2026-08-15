@@ -134,13 +134,20 @@ def _lax_node_key(qual: str, prefix: str) -> tuple[str, str] | None:
 
 
 def _lax_covers_key(node: str) -> tuple[str, str] | None:
-    """tracer ``path::co_name`` -> (module_dotted, co_name)."""
+    """tracer ``path::<qualified>`` -> (module_dotted, bare_final_name).
+
+    The tracer now class-qualifies the leaf (``Class.method``); the lax join is
+    class-agnostic by construction, so it reduces that back to the bare final
+    name to meet the arm B lax key (which also drops the class). A module-level
+    function or a dunder with no dot is returned unchanged.
+    """
     path, sep, name = node.partition("::")
     if not sep:
         return None
     if path.endswith(".py"):
         path = path[:-3]
-    return (path.replace("/", "."), name)
+    bare = name.rsplit(".", 1)[-1] if "." in name else name
+    return (path.replace("/", "."), bare)
 
 
 def build_lax_index(nodes_path: Path,
