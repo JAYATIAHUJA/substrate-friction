@@ -1,76 +1,94 @@
-# `data/shipped/` — the pre-built graph a judge never has to build
+# `data/shipped/` — the distilled payload a judge never has to build
 
-`setup.sh` loads everything in this directory so **no judge ever runs
-tree-sitter over Django**. The graph is committed as data; the engine is loaded
-from it in one pass.
+The working corpus, `data/instances/arms/`, is **4.0 GB**: per instance it holds
+the full `index.scip` (~67 MB, the pyright SCIP index) and the *complete* arm-A
+and arm-B call graphs. None of that is needed to *run* the product. This
+directory is the **17 MB** distillation `setup.sh` loads, so **no judge ever
+re-indexes Django or re-parses a repo**.
 
 ## What is here
 
-| File | Purpose |
+| Path | Purpose |
 | --- | --- |
-| `nodes.ndjson.gz` | Combined node rows for all 50 pre-built subgraphs (407,302 nodes). |
-| `edges.ndjson.gz` | Combined edge rows for all 50 pre-built subgraphs (660,231 edges). |
-| `subgraphs.json` | The manifest `friction check`/`friction list` read (fix/test endpoint ids, node/edge counts, band per instance). |
-| `engine_cache.json` | Recorded engine answerability + cohort path/fan-in results; supplies the min-max bounds `friction check` normalises against, and the answered/timed-out/OOM status `friction list` prints. |
+| `arms/manifest.jsonl` | Per-instance/per-arm node+edge counts, id band, and `fix_site_ids`/`test_target_ids`. The cache `friction compare` / `list` read. **All 50 instances.** |
+| `arms/path_stats.json` | The pinned live-engine answerability and bounded fix→test path counts per arm — the two-arm contrast `compare` renders. **All 50 instances.** |
+| `arms/<instance_id>/nodes.ndjson.gz` | Both arms' bounded-neighbourhood `Function` nodes (band-disjoint), gzipped. |
+| `arms/<instance_id>/edges.ndjson.gz` | Both arms' bounded-neighbourhood `CALLS` edges (band-disjoint), gzipped. |
 | `annotations.json` | Per-instance fix-site and test-target function ids. |
-| `resolved/*.json` | The three published ground-truth resolved-sets (see Provenance). |
+| `resolved/*.json` | The three published SWE-bench ground-truth resolved-sets. |
 | `manifest.json` | Machine-readable inventory of this directory. |
 
-`setup.sh` decompresses the two `.ndjson.gz` files in place, loads them into the
-engine with `python -m friction.loader --dir data/shipped`, and copies
-`subgraphs.json`, `engine_cache.json`, `annotations.json`, and `resolved/`
-into `data/instances/` (which is `.gitignore`d and therefore absent on a clean
-clone — the CLI reads them from there).
+## The distillation: bounded neighbourhoods, both arms
 
-## Provenance
+`friction compare` / `list` / `delta` / `eval` are **cache-backed** — they read
+only `arms/manifest.jsonl` + `arms/path_stats.json` + the `docs/` reports, never
+a graph. So a clean clone can run the headline the moment the package is
+installed; the engine is not even required for `compare`.
 
-- **Dataset:** SWE-bench Verified, `django/django` instances. 231 django
-  instances exist in the split; **50 are pre-built here**, of which **43 carry
-  both a fix site and a test target** (the endpoint-bearing set the metric is
-  scored on).
-- **Base commits:** each subgraph is built at that instance's `base_commit`
-  (recorded per instance in `subgraphs.json` under `base_commit`).
-- **The `test_patch` WAS applied** before parsing. The graph reflects the repo
-  tree at `base_commit` with the instance's gold `test_patch` applied, so the
-  test targets the agent must reach actually exist as nodes. The solution patch
-  is **not** applied — that is what the agent is being scored on.
-- **Build path:** `friction.build` (tree-sitter Python) parses the tree into
-  File/Class/Function nodes and CALLS/HAS_METHOD/INHERITS/IMPORTS edges;
-  `friction.subgraph` slices each instance to the subgraph reachable within the
-  traversal budget around its fix/test seeds and shifts every id into a disjoint
-  band (`4_000_000_000 + i * 10_000_000`), so all 50 subgraphs coexist in one
-  engine without id collisions.
-- **Ground truth (`resolved/`):** three published SWE-bench systems —
-  `20240402_sweagent_gpt4` (112/500), `20240620_sweagent_claude3.5sonnet`
-  (168/500), and `20241029_OpenHands-CodeAct-2.1-sonnet` (265/500, the primary
-  label). A `resolved` entry means that system's patch passed the instance's
-  tests; the label is the outcome the friction metric is evaluated against.
-- **Engine pin:** built and loaded against HydraDB
-  `02a40025d2d57e97ab2754c8256219cdbfeab379` (v0.1.1, AGPL-3.0).
+To *live-load* an arm and run one real `algo.MSpaths`, only the bounded
+neighbourhood the query is defined over is needed. Every node that can lie on a
+bounded fix→test path is within `maxLen` hops of an endpoint (see
+`friction.subgraph`), so `scripts/distil_shipped.py` ships, per instance and per
+arm, the induced **maxLen-6** neighbourhood of `fix_site_ids ∪ test_target_ids`,
+capped at the engine's real envelope (`NODE_BUDGET = 16_000`,
+`EDGE_BUDGET = 24_000`), in the arms' own disjoint id bands. If all 50 were
+loaded that is **623,978 nodes / 1,186,841 edges**; `setup.sh` loads only a
+small working set (below).
 
-## Scope / what is deliberately NOT shipped
+### Faithful for arm A; truncated for arm B — and that is the finding
 
-- **The full band-0 Django graph** (`data/graphs/django`, 46,565 nodes /
-  190,061 edges) is not shipped. `friction check` addresses the **banded
-  subgraph** ids (e.g. `4020005905`), so shipping the band-0 graph would not
-  answer a single `check`. The subgraphs are the load target.
-- **`ref_cache.json`** (the full reference path-enumeration cache used by the
-  null/fidelity analysis) is not shipped; it is only needed to reproduce the
-  headline numbers via `uv run python -m friction.harness`, not to run the gate.
+`scripts/distil_shipped.py` reports: **arm A 0/50 truncated**, **arm B 47/50
+truncated**. Arm A is sparse, so its maxLen-6 neighbourhood fits the budget and
+is a faithful slice of the full arm — a live arm-A query returns the **same path
+count** the cache recorded (verified: `django__django-10554` arm A returns 80
+paths live, matching `path_stats.json`). Arm B is ~4× denser, so its maxLen-6
+neighbourhood *exceeds* the 24k-edge budget and is truncated. This is the density
+paradox in the data itself. Consequently:
 
-## Working-set safety
+- The faithful **live** demonstration is **arm A**.
+- Arm B's full-graph unanswerability (24 of 28 comparable instances time out at
+  maxLen 6, 1 OOMs) is the **cached** measurement in `path_stats.json`; it is
+  *not* re-derivable from the shipped truncated arm-B slice, and `setup.sh` does
+  not pretend otherwise.
 
-The combined load is **407,302 nodes / 660,231 edges (~11.5 MB gzipped, 12 MB
-total)** — a one-shot ingest of well under 1 GB of writes. That stays far below
-the ~6.1 GB threshold at which the engine's `CLOUD_PROVIDER=local` SlateDB
-LocalFileSystem backend hits its `PutMode::Update` defect (see the comment in
-`docker-compose.yml` and the retraction in `docs/engine-scaling.md`). Do not
-loop the loader against a persistent `hydradb-data` volume.
+## Scope / what is deliberately NOT shipped (so nothing looks complete when it isn't)
 
-## The result this graph produces (do not re-read as a positive)
+- **The per-instance `index.scip`** (~67 MB each) and the **full-arm graphs**
+  beyond the maxLen-6 neighbourhood — regeneration inputs, rebuilt by
+  `scripts/build_arms.py`.
+- **The django checkout** (`data/repos/django`) and **`data/instances/ref_cache.json`**
+  — needed only to reproduce the headline numbers via `friction.harness` /
+  `scripts/graph_delta.py`, not to run the CLI.
+- **`docs/graph-delta.md` regeneration inputs** (the repo + a ~67 MB `.scip`
+  index). The report itself is committed under `docs/` and `friction delta`
+  prints it; regenerating it needs the un-shipped repo + index.
 
-Scoring this substrate is a **NO-GO**: over the 43 endpoint-bearing instances the
-friction metric does **not** predict agent failure — AUC 0.565, r=0.055,
-p=0.726, a clean null. The confident-looking engine number (AUC 0.780) is a
-demonstrated artifact of the engine's `pathCount = 20` truncation (fidelity
-recall 0.0264). `friction eval` and `friction fidelity` print the full record.
+All 50 instances are present in `arms/manifest.jsonl` and `arms/path_stats.json`,
+so `friction compare --issue <any of 50>` works from the cache. Every instance's
+bounded neighbourhood is shipped, so any instance can also be live-loaded via
+`python -m friction.loader --dir <decompressed instance dir>`.
+
+## Working-set safety (issue #81)
+
+`setup.sh` loads a **small named working set** — `django__django-10554`,
+`django__django-11087`, `django__django-10973` (both arms each, ~33k nodes / ~62k
+edges combined) — a one-shot ingest of well under 1 GB of writes. That stays far
+below the ~6.1 GB threshold at which the engine's `CLOUD_PROVIDER=local` SlateDB
+`LocalFileSystem` backend hits its `PutMode::Update` defect (see the comment in
+`docker-compose.yml` and `docs/engine-scaling.md`). Do **not** loop the loader
+against a persistent `hydradb-data` volume, and do not bulk-load all 50 shipped
+neighbourhoods into one persistent store.
+
+## Engine pin
+
+Built and loaded against HydraDB `02a40025d2d57e97ab2754c8256219cdbfeab379`
+(v0.1.1, AGPL-3.0).
+
+## The result this substrate produces (do not re-read as a positive)
+
+The **headline** is the substrate finding: a name-matched call graph's edges have
+a **precision ceiling of 0.746** against the type-resolved graph (Jaccard 0.3143)
+— run `friction delta`. The secondary, honestly-null result is a **scoped NO-GO**
+on per-instance prediction (arm A, f1 / path-multiplicity only, AUC 0.631, n=18;
+bootstrap 95% CI on the gap to `patch_lines` spans zero) — run `friction eval`.
+Neither is dressed up.

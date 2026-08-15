@@ -1,20 +1,34 @@
-"""Render the subgraph between fix sites and tests.
+"""The figures. What name matching costs, drawn three ways.
 
-Two pictures, two stories.
+The three v2 figures — the deliverables of this module — are the two-arm ones,
+regenerable from the committed caches via ``python -m friction.viz``:
 
-`render_pair` is the classic contrast: a low-friction instance's fix->test
-subgraph beside a high-friction one. High-friction instances look like a
-hairball; low-friction ones look like a clean line. That contrast is the demo.
+* :func:`render_arms` (docs/plots/arms.png) — THE MONEY SHOT. One instance, two
+  panels over one shared layout: the fix-site call neighbourhood as arm A
+  (name-matched) sees it, beside the same neighbourhood as arm B (type-resolved)
+  sees it. Arm A's edges are coloured UNCONFIRMED (red) vs CONFIRMED-by-arm-B
+  (grey), the confirmed/unconfirmed split decided by ``friction.identity``'s join.
+  The red mass is the finding.
+* :func:`render_offenders` (docs/plots/offenders.png) — the worst unconfirmed
+  targets (``extend`` 139, ``lower`` 125, ``cursor`` 54, …) as a bar chart, with
+  ``cursor`` annotated as the honest counter-example: there arm A was right and
+  pyright under-reported, so precision is a ceiling in both directions.
+* :func:`render_density` (docs/plots/density.png) — the density paradox: per
+  instance, arm A vs arm B edge counts with engine-answerability overlaid. Arm B
+  is ~4x denser and is the arm the engine cannot traverse (answered 3/28 vs
+  arm A's 18/28). The graph worth having is the one hardest to query.
 
-`render_truncation` is the more important one. For a single instance it draws,
-side by side over the IDENTICAL edge set, the paths the engine returned under its
-``pathCount`` cap and the paths a full enumeration finds. The engine sees a sliver
-(cohort fidelity recall 0.0264: 1021 returned of ~38720 real). That picture is why
-the engine-computed AUC 0.780 was an artifact of truncation, not a real signal.
+The two v1 figures remain for the historical record. `render_pair` is the classic
+contrast (a low-friction fix->test subgraph beside a high-friction one).
+`render_truncation` draws, over the IDENTICAL edge set, the paths the engine
+returned under its ``pathCount`` cap beside a full enumeration.
 """
 
 from __future__ import annotations
 
+import json
+import re
+import statistics
 from pathlib import Path
 
 import networkx as nx
@@ -22,6 +36,13 @@ import networkx as nx
 from friction.paths import PathSet
 
 COLOURS = {"fix": "#2563eb", "test": "#16a34a", "intermediate": "#9ca3af"}
+
+# Two-arm figure palette. Grey = arm B confirms the arm-A edge; red = arm B does
+# not (a name-match artifact OR a pyright under-report — a ceiling, see offenders).
+EDGE_CONFIRMED = "#9ca3af"
+EDGE_UNCONFIRMED = "#dc2626"
+ARM_A_COLOUR = "#2563eb"
+ARM_B_COLOUR = "#ea580c"
 
 
 def build_subgraph(path_set: PathSet, fix_ids: list[int], test_ids: list[int]) -> nx.Graph:
@@ -286,7 +307,480 @@ def generate_demo_figures() -> tuple[Path, Path]:
     return pair_out, trunc_out
 
 
+# ==========================================================================
+# TWO-ARM FIGURES — the v2 deliverables. All three regenerate from the caches
+# committed under data/instances/arms/ and the docs/graph-delta.md report.
+# ==========================================================================
+
+_ARMS_ROOT = Path("data/instances/arms")
+_MANIFEST = _ARMS_ROOT / "manifest.jsonl"
+_PATH_STATS = _ARMS_ROOT / "path_stats.json"
+_GRAPH_DELTA = Path("docs/graph-delta.md")
+
+# Figure 1's instance, chosen from real data (see the module tests and findings):
+# django__django-11490's fix site is get_combinator_sql, and four of its nine
+# unconfirmed edges point at `extend` — the SAME list.extend collision that tops
+# the offenders table. The local money shot and the repo-wide bar chart show the
+# one finding at two scales.
+_ARMS_INSTANCE = "django__django-11490"
+_ARMS_DEPTH = 2
+
+
+# --- arm NDJSON + identity join (index-free, from the committed caches) -----
+
+def _load_arm(instance: str, arm: str) -> tuple[dict[int, str], list[tuple[int, int]]]:
+    """Read one arm's committed NDJSON: ``{node_id: qual}`` and ``[(src, dst)]``."""
+    base = _ARMS_ROOT / instance / arm
+    nodes: dict[int, str] = {}
+    for line in (base / "nodes.ndjson").read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            r = json.loads(line)
+            nodes[r["id"]] = r["qual"]
+    edges: list[tuple[int, int]] = []
+    for line in (base / "edges.ndjson").read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            r = json.loads(line)
+            edges.append((r["src"], r["dst"]))
+    return nodes, edges
+
+
+def _discover_prefix(b_quals, a_quals) -> str:
+    """The constant module prefix scip-python prepends (e.g. ``data.repos.django.``).
+
+    Recovered index-free from the committed arm quals, reproducing what
+    ``friction.identity.discover_scip_prefix`` derives from an index. scip-python
+    roots project modules at ``<repo-path-as-dots>.<package>``; arm A keeps the
+    package as its top segment. So for each arm-B module we strip up to the LAST
+    occurrence of the dominant arm-A top package (``django`` sits in the path
+    *and* is the package, so the last occurrence is the real boundary) and take
+    the most common candidate — stdlib/typeshed nodes that leaked in carry no
+    such segment and are ignored, exactly as they are unjoinable and unscored.
+    """
+    from collections import Counter
+
+    a_tops = Counter(q.split("::")[0].split(".")[0] for q in a_quals)
+    if not a_tops:
+        return ""
+    a_top = a_tops.most_common(1)[0][0]
+    cands: Counter = Counter()
+    for q in b_quals:
+        segs = q.split("::")[0].split(".")
+        idxs = [i for i, s in enumerate(segs) if s == a_top]
+        if idxs:
+            j = idxs[-1]
+            cands[".".join(segs[:j]) + "." if j > 0 else ""] += 1
+    return cands.most_common(1)[0][0] if cands else ""
+
+
+def _out_neighbourhood(edges: list[tuple[int, int]], seeds, depth: int) -> set[int]:
+    """Node ids within ``depth`` outgoing hops of ``seeds`` (inclusive)."""
+    out: dict[int, list[int]] = {}
+    for s, d in edges:
+        out.setdefault(s, []).append(d)
+    reached = set(seeds)
+    frontier = set(seeds)
+    for _ in range(depth):
+        nxt: set[int] = set()
+        for u in frontier:
+            for v in out.get(u, []):
+                if v not in reached:
+                    nxt.add(v)
+        reached |= nxt
+        frontier = nxt
+    return reached
+
+
+def joined_arm_neighbourhood(instance: str, depth: int = _ARMS_DEPTH) -> dict:
+    """Build Figure 1's data: the fix-site neighbourhood in both arms, joined.
+
+    Reads only committed caches (the per-arm NDJSON and the manifest). Maps every
+    node into ``friction.identity``'s shared ``scope::leaf`` space, restricts to
+    the arm-A out-neighbourhood of the mapped fix sites, classifies each arm-A
+    edge confirmed/unconfirmed by membership in arm B's joined edge set, and
+    returns the same-neighbourhood arm-B edges for the second panel.
+
+    Returns a dict with ``a_edges`` (list of ``(src, dst, confirmed)``),
+    ``b_edges`` (list of ``(src, dst)``), ``roles`` (``leaf -> role``),
+    ``fix_names`` and count fields. Purely a data function — no plotting.
+    """
+    from friction.identity import normalize_qualname, normalize_scip
+
+    manifest = {r["instance_id"]: r for r in _read_manifest()}
+    rec = manifest[instance]
+    a_nodes, a_raw = _load_arm(instance, "arm_a")
+    b_nodes, b_raw = _load_arm(instance, "arm_b")
+    prefix = _discover_prefix(b_nodes.values(), a_nodes.values())
+
+    a_leaf = {i: normalize_qualname(q) for i, q in a_nodes.items()}
+    b_leaf = {i: normalize_scip(q, prefix) for i, q in b_nodes.items()}
+
+    b_set: set[tuple[str, str]] = set()
+    for s, d in b_raw:
+        ss, dd = b_leaf.get(s), b_leaf.get(d)
+        if ss and dd:
+            b_set.add((ss, dd))
+
+    fix_ids = [i for i in (rec["arm_a"].get("fix_site_ids") or []) if i in a_nodes]
+    test_ids = set(rec["arm_a"].get("test_target_ids") or [])
+    nbr = _out_neighbourhood(a_raw, fix_ids, depth)
+    nbr_leaves = {a_leaf[i] for i in nbr}
+
+    a_edges: list[tuple[str, str, bool]] = []
+    for s, d in a_raw:
+        if s in nbr and d in nbr:
+            key = (a_leaf[s], a_leaf[d])
+            a_edges.append((key[0], key[1], key in b_set))
+
+    b_edges = sorted({(s, d) for (s, d) in b_set
+                      if s in nbr_leaves and d in nbr_leaves})
+
+    fix_leaves = {a_leaf[i] for i in fix_ids}
+    test_leaves = {a_leaf[i] for i in nbr if i in test_ids}
+    roles: dict[str, str] = {}
+    for leaf in nbr_leaves | {s for s, _ in b_edges} | {d for _, d in b_edges}:
+        roles[leaf] = ("fix" if leaf in fix_leaves
+                       else "test" if leaf in test_leaves else "intermediate")
+
+    unconfirmed = sum(1 for _, _, ok in a_edges if not ok)
+    return {
+        "instance": instance,
+        "depth": depth,
+        "a_edges": a_edges,
+        "b_edges": b_edges,
+        "roles": roles,
+        "fix_names": sorted(leaf.split("::")[-1] for leaf in fix_leaves),
+        "n_a_edges": len(a_edges),
+        "n_confirmed": len(a_edges) - unconfirmed,
+        "n_unconfirmed": unconfirmed,
+        "n_b_edges": len(b_edges),
+    }
+
+
+# --- graph builders (pure, unit-tested) ------------------------------------
+
+def arm_a_graph(a_edges) -> nx.DiGraph:
+    """Directed graph of arm-A edges, each carrying ``confirmed: bool``.
+
+    ``a_edges`` is an iterable of ``(src, dst, confirmed)``. Empty input yields an
+    empty graph, never an exception.
+    """
+    g = nx.DiGraph()
+    for src, dst, confirmed in a_edges:
+        g.add_edge(src, dst, confirmed=bool(confirmed))
+    return g
+
+
+def confirmed_subgraph(g: nx.DiGraph) -> nx.DiGraph:
+    """The arm-A edges arm B confirms — always a subset of ``g``'s edges."""
+    sub = nx.DiGraph()
+    for u, v, data in g.edges(data=True):
+        if data.get("confirmed"):
+            sub.add_edge(u, v, **data)
+    return sub
+
+
+def _apply_roles(graph, roles: dict) -> list[str]:
+    return [COLOURS.get(roles.get(n, "intermediate"), COLOURS["intermediate"])
+            for n in graph.nodes]
+
+
+# --- FIGURE 1: arms.png -----------------------------------------------------
+
+def render_arms(a_edges, b_edges, roles: dict, out_path: Path,
+                instance_label: str, counts: dict) -> Path:
+    """Two panels over ONE shared layout: arm A (name-matched) beside arm B
+    (type-resolved), same fix-site neighbourhood.
+
+    Panel A colours each arm-A edge red where arm B does not confirm it and grey
+    where it does — the red mass IS the finding. Panel B draws arm B's edges over
+    the identical node positions so the eye compares like with like. Real counts
+    label both panels. Empty inputs render empty panels rather than raising.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    a_g = arm_a_graph(a_edges)
+    b_g = nx.DiGraph()
+    b_g.add_edges_from(b_edges)
+
+    # One layout over the union of both arms' nodes, fixed seed, reused verbatim
+    # in both panels so a node sits in the same place on the left and the right.
+    union = nx.Graph()
+    union.add_nodes_from(a_g.nodes)
+    union.add_nodes_from(b_g.nodes)
+    union.add_edges_from(a_g.edges())
+    union.add_edges_from(b_g.edges())
+    pos = nx.spring_layout(union, seed=7, k=0.7) if union.number_of_nodes() else {}
+
+    fig, axes = plt.subplots(1, 2, figsize=(13.5, 6.6))
+
+    # Left — arm A, edges classified.
+    ax = axes[0]
+    if a_g.number_of_edges():
+        conf = [(u, v) for u, v, d in a_g.edges(data=True) if d["confirmed"]]
+        unconf = [(u, v) for u, v, d in a_g.edges(data=True) if not d["confirmed"]]
+        nx.draw_networkx_edges(a_g, pos, ax=ax, edgelist=conf, width=1.4,
+                               edge_color=EDGE_CONFIRMED, alpha=0.8,
+                               arrows=True, arrowsize=8, node_size=150)
+        nx.draw_networkx_edges(a_g, pos, ax=ax, edgelist=unconf, width=2.6,
+                               edge_color=EDGE_UNCONFIRMED, alpha=0.95,
+                               arrows=True, arrowsize=9, node_size=150)
+    if a_g.number_of_nodes():
+        nx.draw_networkx_nodes(a_g, pos, ax=ax, node_color=_apply_roles(a_g, roles),
+                               node_size=150, linewidths=0.0)
+    ax.set_title(
+        f"arm A · name-matched\n{counts['n_a_edges']} edges — "
+        f"{counts['n_unconfirmed']} unconfirmed by arm B (red), "
+        f"{counts['n_confirmed']} confirmed (grey)", fontsize=12)
+    ax.axis("off")
+    _arms_legend(ax)
+
+    # Right — arm B, same positions.
+    ax = axes[1]
+    if b_g.number_of_edges():
+        nx.draw_networkx_edges(b_g, pos, ax=ax, width=1.4,
+                               edge_color=EDGE_CONFIRMED, alpha=0.85,
+                               arrows=True, arrowsize=8, node_size=150)
+    if b_g.number_of_nodes():
+        nx.draw_networkx_nodes(b_g, pos, ax=ax, node_color=_apply_roles(b_g, roles),
+                               node_size=150, linewidths=0.0)
+    ax.set_title(
+        f"arm B · type-resolved\n{counts['n_b_edges']} edges over the same "
+        "neighbourhood", fontsize=12)
+    ax.axis("off")
+
+    fig.suptitle(instance_label, fontsize=15, y=1.0)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+def _arms_legend(ax) -> None:
+    from matplotlib.lines import Line2D
+    handles = [
+        Line2D([0], [0], color=EDGE_UNCONFIRMED, lw=2.6,
+               label="arm A edge arm B does NOT confirm"),
+        Line2D([0], [0], color=EDGE_CONFIRMED, lw=1.4,
+               label="arm A edge arm B confirms"),
+        Line2D([0], [0], marker="o", color="none", label="fix site",
+               markerfacecolor=COLOURS["fix"], markersize=9),
+    ]
+    ax.legend(handles=handles, loc="lower center", ncol=1, frameon=False,
+              fontsize=9, bbox_to_anchor=(0.5, -0.12))
+
+
+# --- FIGURE 2: offenders.png ------------------------------------------------
+
+def _parse_offenders(path: Path = _GRAPH_DELTA) -> list[tuple[str, int]]:
+    """Read the offender table straight from the committed graph-delta report.
+
+    Reading the numbers from docs/graph-delta.md (the pinned, reviewed source)
+    rather than recomputing guarantees the figure shows the reported facts
+    verbatim — no re-rounding, no drift.
+    """
+    rows: list[tuple[str, int]] = []
+    grab = False
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if line.startswith("## Where arm A"):
+            grab = True
+            continue
+        if grab and line.startswith("## "):
+            break
+        m = re.match(r"\|\s*`([^`]+)`\s*\|\s*(\d+)\s*\|", line)
+        if grab and m:
+            rows.append((m.group(1), int(m.group(2))))
+    return rows
+
+
+def render_offenders(offenders, out_path: Path, top_n: int = 15,
+                     counter_example: str = "cursor") -> Path:
+    """Horizontal bar chart of the worst unconfirmed arm-A targets.
+
+    ``cursor`` is drawn in a distinct colour and annotated as the honest
+    counter-example: there the unconfirmed edges are real ``connection.cursor()``
+    calls that pyright declined to resolve, so arm A was right. A chart that only
+    showed arm A losing would overclaim; this one states the ceiling both ways.
+    Empty input renders an empty axes rather than raising.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    rows = list(offenders)[:top_n]
+    names = [n for n, _ in rows]
+    counts = [c for _, c in rows]
+    # barh puts index 0 at the bottom; reverse so the largest sits at the top.
+    y = list(range(len(rows)))[::-1]
+    colours = [ARM_B_COLOUR if n == counter_example else EDGE_UNCONFIRMED
+               for n in names]
+
+    fig, ax = plt.subplots(figsize=(10, max(4.5, 0.42 * len(rows) + 1.5)))
+    ax.barh(y, counts, color=colours, height=0.72)
+    ax.set_yticks(y)
+    ax.set_yticklabels([f"{n}()" for n in names], fontsize=10)
+    for yi, c in zip(y, counts):
+        ax.text(c + max(counts) * 0.01, yi, str(c), va="center", fontsize=9)
+
+    if counter_example in names:
+        ci = names.index(counter_example)
+        yi = y[ci]
+        # Land the note in the whitespace right of the short lower bars, so it
+        # never overprints the long extend/lower bars one row up.
+        ax.annotate(
+            "arm A was RIGHT here — real connection.cursor() calls\n"
+            "pyright declined to resolve (precision is a ceiling both ways)",
+            xy=(counts[ci], yi),
+            xytext=(max(counts) * 0.40, yi - 1.7),
+            fontsize=8.5, color=ARM_B_COLOUR, va="center",
+            arrowprops=dict(arrowstyle="->", color=ARM_B_COLOUR, lw=1.0))
+
+    ax.set_xlabel("unconfirmed arm-A edges (django, whole repo)", fontsize=11)
+    ax.set_title("What name matching's unconfirmed edges point at\n"
+                 "container-method name collisions — list.extend, str.lower, …",
+                 fontsize=13)
+    ax.set_xlim(0, max(counts) * 1.18 if counts else 1)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+# --- FIGURE 3: density.png --------------------------------------------------
+
+def _read_manifest(path: Path = _MANIFEST) -> list[dict]:
+    return [json.loads(line) for line in
+            Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def density_rows(manifest_path: Path = _MANIFEST,
+                 path_stats_path: Path = _PATH_STATS) -> list[dict]:
+    """Per comparable instance: both arms' edge counts and engine-answerability.
+
+    Reads the committed manifest (edge counts) and path_stats (the ``answered``
+    flag per arm). Only the 28 ``comparable`` instances — the ones both arms
+    mapped endpoints for and the engine actually attempted — are returned.
+    """
+    manifest = {r["instance_id"]: r for r in _read_manifest(manifest_path)}
+    per = json.loads(Path(path_stats_path).read_text(encoding="utf-8"))["per_instance"]
+    rows: list[dict] = []
+    for iid, rec in manifest.items():
+        if not rec.get("comparable"):
+            continue
+        stat = per.get(iid, {})
+        rows.append({
+            "instance": iid,
+            "a_edges": rec["arm_a"]["edges"],
+            "b_edges": rec["arm_b"]["edges"],
+            "a_answered": bool(stat.get("arm_a", {}).get("answered")),
+            "b_answered": bool(stat.get("arm_b", {}).get("answered")),
+        })
+    return rows
+
+
+def render_density(rows, out_path: Path) -> Path:
+    """The density paradox as a dumbbell chart.
+
+    One row per comparable instance, sorted by arm-B size: a line from arm A's
+    edge count to arm B's, a filled marker where the engine answered and a hollow
+    one where it timed out or OOM'd. Median lines (median-low, the reported
+    figures) anchor each arm. One glance shows arm B far to the right and mostly
+    hollow — the richer graph is the one the engine cannot traverse. Empty input
+    renders an empty axes rather than raising.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    rows = sorted(rows, key=lambda r: r["b_edges"])
+    y = list(range(len(rows)))
+
+    fig, ax = plt.subplots(figsize=(11, max(5, 0.34 * len(rows) + 1.8)))
+    for yi, r in zip(y, rows):
+        ax.plot([r["a_edges"], r["b_edges"]], [yi, yi],
+                color="#d1d5db", lw=1.2, zorder=1)
+        for val, answered, colour in (
+            (r["a_edges"], r["a_answered"], ARM_A_COLOUR),
+            (r["b_edges"], r["b_answered"], ARM_B_COLOUR)):
+            ax.scatter([val], [yi], s=46, zorder=2,
+                       color=colour if answered else "white",
+                       edgecolors=colour, linewidths=1.4)
+
+    a_ans = sum(r["a_answered"] for r in rows)
+    b_ans = sum(r["b_answered"] for r in rows)
+    if rows:
+        a_med = statistics.median_low(r["a_edges"] for r in rows)
+        b_med = statistics.median_low(r["b_edges"] for r in rows)
+        ax.axvline(a_med, color=ARM_A_COLOUR, ls="--", lw=1.0, alpha=0.7)
+        ax.axvline(b_med, color=ARM_B_COLOUR, ls="--", lw=1.0, alpha=0.7)
+        ax.text(a_med, len(rows) - 0.2, f"arm A median {a_med:,}",
+                color=ARM_A_COLOUR, fontsize=8.5, ha="right", rotation=90, va="top")
+        ax.text(b_med, len(rows) - 0.2, f"arm B median {b_med:,}",
+                color=ARM_B_COLOUR, fontsize=8.5, ha="right", rotation=90, va="top")
+
+    ax.set_yticks(y)
+    ax.set_yticklabels([r["instance"].replace("django__django-", "#") for r in rows],
+                       fontsize=8)
+    ax.set_xlabel("call-graph edges", fontsize=11)
+    ax.set_title(
+        "The density paradox: arm B is ~4x denser and the engine can't traverse it\n"
+        f"engine answered — arm A {a_ans}/{len(rows)} · arm B {b_ans}/{len(rows)} "
+        "(bounded fix→test paths, maxLen 6)", fontsize=12.5)
+
+    from matplotlib.lines import Line2D
+    legend = [
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=ARM_A_COLOUR,
+               markeredgecolor=ARM_A_COLOUR, markersize=8, label="arm A (name-matched)"),
+        Line2D([0], [0], marker="o", color="none", markerfacecolor=ARM_B_COLOUR,
+               markeredgecolor=ARM_B_COLOUR, markersize=8, label="arm B (type-resolved)"),
+        Line2D([0], [0], marker="o", color="none", markerfacecolor="white",
+               markeredgecolor="#6b7280", markersize=8, label="engine did NOT answer"),
+    ]
+    ax.legend(handles=legend, loc="lower right", frameon=False, fontsize=9)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+# --- entrypoint: regenerate all three from committed caches ----------------
+
+def generate_arms_figure(out_path: Path = _PLOTS / "arms.png") -> Path:
+    data = joined_arm_neighbourhood(_ARMS_INSTANCE, _ARMS_DEPTH)
+    fixes = ", ".join(f"{n}()" for n in data["fix_names"]) or "fix site"
+    label = (f"{_ARMS_INSTANCE[8:]} — fix-site neighbourhood of {fixes}: "
+             "same code, two call graphs")
+    return render_arms(data["a_edges"], data["b_edges"], data["roles"],
+                       out_path, label, data)
+
+
+def generate_offenders_figure(out_path: Path = _PLOTS / "offenders.png") -> Path:
+    return render_offenders(_parse_offenders(), out_path)
+
+
+def generate_density_figure(out_path: Path = _PLOTS / "density.png") -> Path:
+    return render_density(density_rows(), out_path)
+
+
+def generate_all() -> tuple[Path, Path, Path]:
+    """Write docs/plots/{arms,offenders,density}.png from the committed caches."""
+    return (generate_arms_figure(),
+            generate_offenders_figure(),
+            generate_density_figure())
+
+
 if __name__ == "__main__":
-    p, t = generate_demo_figures()
-    print(f"wrote {p}")
-    print(f"wrote {t}")
+    for path in generate_all():
+        print(f"wrote {path}")

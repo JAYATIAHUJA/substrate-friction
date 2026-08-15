@@ -49,10 +49,14 @@ services:
       # retraction in docs/engine-scaling.md).
       #
       # We keep the local backend anyway for judge simplicity (no S3 creds,
-      # no MinIO wiring). It is SAFE here because the shipped working set is
-      # tiny: 50 pre-built subgraphs, 407,302 nodes / 660,231 edges, ~11.5 MB
-      # gzipped — a one-shot load of well under 1 GB of writes, nowhere near the
-      # ~6.1 GB threshold. Do NOT loop the loader or re-ingest repeatedly into a
+      # no MinIO wiring). It is SAFE here because setup.sh loads a DELIBERATELY
+      # SMALL working set: 3 named instances x 2 arms (~33k nodes / ~62k edges,
+      # a fraction of the 17 MB shipped corpus) — a one-shot load of well under
+      # 1 GB of writes, nowhere near the ~6.1 GB threshold. The full 50-instance
+      # shipped corpus (623,978 nodes / 1,186,841 edges if all loaded) is on disk
+      # for optional per-instance live loads, but is NOT bulk-loaded here.
+      # `friction compare`/`delta` are cache-backed and need no engine at all.
+      # Do NOT loop the loader or bulk-ingest all 50 neighbourhoods into a
       # persistent ./hydradb-data volume; if you need heavy/iterative ingest,
       # switch CLOUD_PROVIDER to s3 against the MinIO service above.
       # -----------------------------------------------------------------------

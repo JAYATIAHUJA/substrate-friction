@@ -76,3 +76,94 @@ def test_render_pair_writes_a_png_with_empty_low_panel(tmp_path):
     out = viz.render_pair(empty, HIGH, tmp_path / "pair_empty.png",
                           labels=("no paths", "high friction"))
     assert out.exists() and out.stat().st_size > 0
+
+
+# --- two-arm figures -------------------------------------------------------
+
+# A tiny arm-A neighbourhood with a mix of confirmed and unconfirmed edges.
+A_EDGES = [
+    ("m::f", "m::g", True),
+    ("m::f", "m::extend", False),   # the name-match artifact
+    ("m::g", "m::h", True),
+    ("m::g", "m::lower", False),
+]
+B_EDGES = [("m::f", "m::g"), ("m::g", "m::h"), ("m::g", "m::k")]
+ROLES = {"m::f": "fix", "m::g": "intermediate", "m::h": "intermediate",
+         "m::extend": "intermediate", "m::lower": "intermediate", "m::k": "intermediate"}
+COUNTS = {"n_a_edges": 4, "n_confirmed": 2, "n_unconfirmed": 2, "n_b_edges": 3}
+
+
+def test_arm_a_graph_carries_confirmed_flag():
+    g = viz.arm_a_graph(A_EDGES)
+    assert g.number_of_edges() == 4
+    assert g["m::f"]["m::g"]["confirmed"] is True
+    assert g["m::f"]["m::extend"]["confirmed"] is False
+
+
+def test_confirmed_subgraph_is_strictly_smaller_than_full():
+    full = viz.arm_a_graph(A_EDGES)
+    sub = viz.confirmed_subgraph(full)
+    assert sub.number_of_edges() < full.number_of_edges()
+    assert sub.number_of_edges() == 2
+
+
+def test_arm_a_graph_empty_input_yields_empty_graph():
+    g = viz.arm_a_graph([])
+    assert g.number_of_nodes() == 0
+    assert g.number_of_edges() == 0
+    # An empty arm-A graph has an empty confirmed subgraph, not an exception.
+    assert viz.confirmed_subgraph(g).number_of_edges() == 0
+
+
+def test_render_arms_writes_a_png(tmp_path):
+    out = viz.render_arms(A_EDGES, B_EDGES, ROLES, tmp_path / "arms.png",
+                          "demo instance", COUNTS)
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_render_arms_empty_input_still_writes_a_png(tmp_path):
+    out = viz.render_arms([], [], {}, tmp_path / "arms_empty.png", "empty",
+                          {"n_a_edges": 0, "n_confirmed": 0, "n_unconfirmed": 0,
+                           "n_b_edges": 0})
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_render_offenders_writes_a_png(tmp_path):
+    offenders = [("extend", 139), ("lower", 125), ("cursor", 54), ("search", 31)]
+    out = viz.render_offenders(offenders, tmp_path / "offenders.png")
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_render_offenders_empty_input_still_writes_a_png(tmp_path):
+    out = viz.render_offenders([], tmp_path / "offenders_empty.png")
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_render_density_writes_a_png(tmp_path):
+    rows = [
+        {"instance": "django__django-1", "a_edges": 19815, "b_edges": 79447,
+         "a_answered": True, "b_answered": False},
+        {"instance": "django__django-2", "a_edges": 19000, "b_edges": 60000,
+         "a_answered": False, "b_answered": False},
+        {"instance": "django__django-3", "a_edges": 16000, "b_edges": 24000,
+         "a_answered": True, "b_answered": True},
+    ]
+    out = viz.render_density(rows, tmp_path / "density.png")
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_render_density_empty_input_still_writes_a_png(tmp_path):
+    out = viz.render_density([], tmp_path / "density_empty.png")
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_parse_offenders_reads_committed_report_verbatim():
+    # The figure must show the reported facts, not re-rounded ones: extend(139)
+    # tops the committed graph-delta table and cursor(54) is the counter-example.
+    from pathlib import Path
+
+    rows = viz._parse_offenders(Path("docs/graph-delta.md"))
+    d = dict(rows)
+    assert rows[0] == ("extend", 139)
+    assert d["lower"] == 125
+    assert d["cursor"] == 54

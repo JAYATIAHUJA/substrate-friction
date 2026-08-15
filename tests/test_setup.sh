@@ -26,8 +26,8 @@ else
   pass "setup.sh does not invoke just"
 fi
 
-for f in data/shipped/nodes.ndjson.gz data/shipped/edges.ndjson.gz \
-         data/shipped/subgraphs.json data/shipped/engine_cache.json \
+# v2 payload: the cache the CLI reads + the per-instance arm neighbourhoods.
+for f in data/shipped/arms/manifest.jsonl data/shipped/arms/path_stats.json \
          data/shipped/annotations.json data/shipped/manifest.json \
          data/shipped/README.md; do
   [ -s "$f" ] && pass "present & non-empty: $f" || bad "missing/empty: $f"
@@ -36,17 +36,35 @@ done
 ls data/shipped/resolved/*.json >/dev/null 2>&1 \
   && pass "resolved sets present" || bad "no resolved sets in data/shipped/resolved/"
 
-# Gzipped graph must be valid and match the manifest counts.
-if gzip -t data/shipped/nodes.ndjson.gz 2>/dev/null \
-   && gzip -t data/shipped/edges.ndjson.gz 2>/dev/null; then
-  pass "gz graph files are valid gzip"
-  nn=$(gzip -dc data/shipped/nodes.ndjson.gz | wc -l | tr -d ' ')
-  ne=$(gzip -dc data/shipped/edges.ndjson.gz | wc -l | tr -d ' ')
-  [ "$nn" = "407302" ] && pass "node rows = 407302" || bad "node rows = $nn (want 407302)"
-  [ "$ne" = "660231" ] && pass "edge rows = 660231" || bad "edge rows = $ne (want 660231)"
+# All 50 instances must appear in the shipped manifest cache.
+mi=$(grep -c '"instance_id"' data/shipped/arms/manifest.jsonl 2>/dev/null || echo 0)
+[ "$mi" = "50" ] && pass "manifest.jsonl has 50 instances" \
+  || bad "manifest.jsonl has $mi instances (want 50)"
+
+# The warm instance's bounded neighbourhood must ship as valid gzip for both arms.
+WARM=data/shipped/arms/django__django-10554
+if [ -s "$WARM/nodes.ndjson.gz" ] && [ -s "$WARM/edges.ndjson.gz" ] \
+   && gzip -t "$WARM/nodes.ndjson.gz" 2>/dev/null \
+   && gzip -t "$WARM/edges.ndjson.gz" 2>/dev/null; then
+  pass "warm instance neighbourhood is valid gzip (both arms)"
+  nn=$(gzip -dc "$WARM/nodes.ndjson.gz" | wc -l | tr -d ' ')
+  [ "$nn" -gt 0 ] && pass "warm nodes present ($nn rows)" || bad "warm nodes empty"
 else
-  bad "gz graph files are not valid gzip"
+  bad "warm instance neighbourhood missing/invalid gzip"
 fi
+
+# Every shipped instance dir must carry both arm files.
+missing=0
+for d in data/shipped/arms/django__django-*/; do
+  [ -s "${d}nodes.ndjson.gz" ] && [ -s "${d}edges.ndjson.gz" ] || missing=1
+done
+[ "$missing" = "0" ] && pass "every shipped instance has both arm neighbourhood files" \
+  || bad "some shipped instance is missing an arm neighbourhood file"
+
+# Shipped payload must stay under the 50 MB cap.
+kb=$(du -sk data/shipped | cut -f1)
+[ "$kb" -lt 51200 ] && pass "data/shipped is ${kb} KB (< 50 MB cap)" \
+  || bad "data/shipped is ${kb} KB (exceeds 50 MB cap)"
 
 # The object-store defect must be documented in the compose file.
 grep -q "PutMode::Update" docker-compose.yml \
@@ -70,12 +88,14 @@ if curl -sf http://127.0.0.1:9090/readyz >/dev/null 2>&1; then
   else
     bad "friction list did not report 50 instances"
   fi
-  # The warm instance (first annotation, no fix sites) must render and exit 0.
-  WARM_ID="$("$PY" -c 'import json;print(next(iter(json.load(open("data/shipped/annotations.json")))))')"
-  if "$PY" -m friction.cli check --issue "$WARM_ID" >/dev/null 2>&1; then
-    pass "friction check --issue $WARM_ID exits 0"
+  # The primary command must render both arms for a comparable instance and
+  # exit 0. compare is engine-free (it reads the shipped path_stats cache), so
+  # this exercises the demo path a judge will run.
+  WARM_ID="django__django-10973"
+  if "$PY" -m friction.cli compare --issue "$WARM_ID" >/dev/null 2>&1; then
+    pass "friction compare --issue $WARM_ID exits 0"
   else
-    bad "friction check --issue $WARM_ID failed"
+    bad "friction compare --issue $WARM_ID failed"
   fi
 else
   echo "  skip engine checks (no node on :9090)"
