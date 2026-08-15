@@ -67,5 +67,5 @@ A block of **54** unconfirmed arm-A edges points at `django.db.backends.base.bas
 - arm_b_edges_failed_to_map: 0
 - identity_join: arm A tree-sitter qualnames and arm B SCIP canonical forms mapped into one shared `scope::leaf` space via friction.identity; scip-python module prefix 'data.repos.django.' discovered from document paths and stripped; package-__init__ modules collapsed symmetrically (the 229-edge fix, see below)
 - scope_note: scip-python was run --target-only django, so arm B contains only django-package definitions; arm A was restricted to django-sourced edges so both arms share one universe of callers.
-- precision_reading: CEILING: pyright emits no occurrence for untyped receivers, so arm B under-reports; true precision is <= this value.
+- precision_reading: CEILING: pyright emits no occurrence for untyped receivers, so arm B under-reports and never invents an edge; an arm-A edge missing from arm B may still be a real call. Therefore true precision is >= this value, never <= it. See the cursor(54) counter-example, where arm A was right and arm B was incomplete.
 - reproduce: uv run python scripts/graph_delta.py --repo data/repos/django --out docs/graph-delta.md

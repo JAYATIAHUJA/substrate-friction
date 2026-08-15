@@ -164,3 +164,25 @@ def test_write_report_carries_the_measured_and_offender_tables(tmp_path):
     assert "extend" in text and "139" in text
     # the projection interval is rendered, with its assumption
     assert "assum" in text.lower()
+
+
+def test_graph_delta_states_the_ceiling_direction_correctly():
+    """The bound must read >= , never <=.
+
+    Arm B (pyright) emits no occurrence for an untyped receiver, so it
+    under-reports and never invents an edge. An arm-A edge missing from arm B
+    may therefore still be real -- cursor(54) is the proven case. Stating the
+    bound as "<=" claims name matching may be even worse than measured, which is
+    an overclaim AGAINST arm A and contradicts the counter-example. This
+    regressed once from the generator; the guard is here so it cannot again.
+    """
+    from pathlib import Path
+
+    for path in (Path("docs/graph-delta.md"), Path("scripts/graph_delta.py")):
+        text = path.read_text(encoding="utf-8")
+        if "precision_reading" not in text and "precision is" not in text:
+            continue
+        assert "true precision is <= this value" not in text, (
+            f"{path} states the precision bound backwards")
+        assert "true precision is >= this value" in text, (
+            f"{path} must state true precision is >= the ceiling")

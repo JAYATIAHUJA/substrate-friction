@@ -180,7 +180,10 @@ def main(argv=None) -> None:
             f"contains only {scope}-package definitions; arm A was restricted to "
             f"{scope}-sourced edges so both arms share one universe of callers.",
         "precision_reading": "CEILING: pyright emits no occurrence for untyped "
-            "receivers, so arm B under-reports; true precision is <= this value.",
+            "receivers, so arm B under-reports and never invents an edge; an "
+            "arm-A edge missing from arm B may still be a real call. Therefore "
+            "true precision is >= this value, never <= it. See the cursor(54) "
+            "counter-example, where arm A was right and arm B was incomplete.",
         "reproduce": "uv run python scripts/graph_delta.py "
             f"--repo {args.repo} --out {args.out}",
     }
