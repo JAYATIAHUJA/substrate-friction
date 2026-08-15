@@ -33,14 +33,20 @@ score.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
+import networkx as nx
+
+from friction import features as _features
 from friction.config import Settings
+from friction.connectivity import load_graph as _load_graph
 from friction.paths import build_mspaths_cypher
 from friction.probe import Capabilities, load_capabilities
+from friction.reach import build_reach_cypher, profile as _reach_profile
 
 # The relationship types the fix->test bounded query traverses, identical for
 # both arms — the arms differ only in which edges exist, never in how they are
@@ -92,6 +98,29 @@ PATH_STATS_PATH = _arms_path("path_stats.json")
 CAPS_PATH = Path("docs/engine-capabilities.md")
 DELTA_PATH = Path("docs/graph-delta.md")
 EVAL_PATH = Path("docs/evaluation.md")
+PRECISION_PATH = Path("docs/precision.md")
+CONNECTIVITY_PATH = Path("docs/connectivity.md")
+
+# The single honesty label the recommendation always carries. Enforced by tests:
+# the gate never sells the friction score as a beat over the cheap baselines.
+CAVEAT = ("illustrative — the metric does not beat patch-scope baselines "
+          "(see friction eval)")
+
+# Every friction feature is labelled with the direction that produced it. The
+# undirected label carries its own disclaimer so the CLI can never present
+# undirected reachability as "the test exercises this code".
+FEATURE_DIRECTIONS: dict[str, str] = {
+    "fwd_growth": "outward from fix sites (successors)",
+    "bwd_growth": "inward from test targets (predecessors)",
+    "overlap_ratio": "fix-out ball ∩ test-in ball",
+    "fanin": "callers of fix sites (in-degree)",
+    "test_to_fix_hops": "directed test → fix",
+    "undirected_hops": ("undirected — shares a neighbourhood, NOT "
+                        "\"the test exercises this code\""),
+}
+
+# The reachability probe traverses CALLS, the only relation both arms carry.
+REACH_REL = "CALLS"
 
 
 # --------------------------------------------------------------------------
@@ -279,9 +308,17 @@ def _render_arm(view: ArmView, max_len: int) -> list[str]:
     return lines
 
 
-def _render_delta(a: ArmView, b: ArmView) -> list[str]:
+def _render_delta(a: ArmView, b: ArmView, precision_report=None) -> list[str]:
     lines = ["  DELTA  (arm B, type-resolved  vs  arm A, name-matched)",
              "  " + "-" * 52]
+    if precision_report is not None:
+        pr = precision_report
+        lines.append(
+            f"    edge quality (cohort):  {pr.confirmed:,} arm-A edges confirmed "
+            f"by arm B, {pr.only_a:,} unconfirmed (arm-A-only),")
+        lines.append(
+            f"                            {pr.only_b:,} arm-B edges arm A missed "
+            f"— precision ceiling {pr.precision_ceiling}, recall {pr.recall}.")
     if a.edges:
         lines.append(f"    edge density:  arm B has {b.edges / a.edges:.2f}x arm A's edges "
                      f"({b.edges:,} vs {a.edges:,})")
@@ -314,7 +351,8 @@ def _render_delta(a: ArmView, b: ArmView) -> list[str]:
 
 
 def render_compare(a: ArmView, b: ArmView, instance_id: str,
-                   comparable: bool, max_len: int = 6) -> str:
+                   comparable: bool, max_len: int = 6,
+                   precision_report=None) -> str:
     lines = ["", f"  {instance_id}"]
     lines.append(f"  comparable cohort: {'yes' if comparable else 'no'}"
                  + ("" if comparable else
@@ -325,7 +363,7 @@ def render_compare(a: ArmView, b: ArmView, instance_id: str,
     lines.append("  " + RULE)
     lines += _render_arm(b, max_len)
     lines.append("  " + RULE)
-    lines += _render_delta(a, b)
+    lines += _render_delta(a, b, precision_report)
     lines.append("")
     return "\n".join(lines)
 
@@ -396,6 +434,293 @@ def render_list(rows: list[dict]) -> str:
 
 
 # --------------------------------------------------------------------------
+# check — the gate
+# --------------------------------------------------------------------------
+
+def load_instance_graph(instance_id: str, arm: str = "arm_b") -> nx.DiGraph:
+    """Load one instance/arm's call graph as a networkx DiGraph.
+
+    Prefers the working build's arm-specific ``<arm>/edges.ndjson``; falls back
+    to the shipped payload's flat, gzipped ``edges.ndjson.gz`` (both arms in one
+    band-disjoint file — arm A in the 100… band, arm B in the 200…, so a query
+    seeded on one arm's endpoints never crosses into the other). This is the same
+    working-then-shipped fork the rest of the CLI honours; a clean clone has only
+    the shipped copy. Returns an empty graph when neither exists so ``check`` can
+    still print the endpoints and the recommendation without an exception.
+    """
+    base = _arms_path(instance_id)          # data/{instances,shipped}/arms/<id>
+    plain = base / arm / "edges.ndjson"
+    if plain.exists():
+        return _load_graph(plain)
+    gz = base / "edges.ndjson.gz"
+    if gz.exists():
+        g = nx.DiGraph()
+        with gzip.open(gz, "rt", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                g.add_edge(int(row["src"]), int(row["dst"]))
+        return g
+    return nx.DiGraph()
+
+
+def _instance_edge_rows(instance_id: str, arm: str,
+                        band: int) -> list[dict]:
+    """Raw ``{src,dst,type}`` rows for live ingestion, filtered to ``arm``'s band.
+
+    The shipped flat file holds both arms; restricting to the arm's id band keeps
+    the ingested subgraph to the arm under test. Working arm-specific files are
+    already single-band, so the filter is a no-op there.
+    """
+    base = _arms_path(instance_id)
+    plain = base / arm / "edges.ndjson"
+    lo = band
+    hi = band + 10_000_000_000            # bands are spaced 1e10 apart
+    rows: list[dict] = []
+
+    def _keep(src: int) -> bool:
+        return band == 0 or (lo <= src < hi)
+
+    if plain.exists():
+        for line in plain.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            d = json.loads(line)
+            if _keep(int(d["src"])):
+                rows.append({"src": int(d["src"]), "dst": int(d["dst"]),
+                             "type": d.get("type", REACH_REL)})
+        return rows
+
+    gz = base / "edges.ndjson.gz"
+    if gz.exists():
+        with gzip.open(gz, "rt", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                d = json.loads(line)
+                if _keep(int(d["src"])):
+                    rows.append({"src": int(d["src"]), "dst": int(d["dst"]),
+                                 "type": d.get("type", REACH_REL)})
+    return rows
+
+
+@dataclass(frozen=True)
+class CheckReport:
+    """Everything the gate prints for one instance, engine fields optional."""
+
+    instance_id: str
+    arm: str
+    band: int
+    fix_ids: list[int]
+    test_ids: list[int]
+    features: dict[str, float]          # name -> value, per FEATURE_NAMES
+    cypher: str                         # the reachability query for fix[0], out
+    recommendation: str
+    caveat: str
+    # live-engine fields — populated only by probe_engine
+    engine_answered: bool | None = None  # None = engine not attempted
+    latency_ms: float | None = None
+    reach_hops: list[int] = field(default_factory=list)
+    reach_sizes: list[int] = field(default_factory=list)
+    reach_direction: str = "out"
+    engine_note: str = ""
+
+
+def _recommendation(feats: _features.V4Features) -> str:
+    """One honest sentence from the directional features.
+
+    Reads the DIRECTED test → fix relation first (the clean signal), then the
+    undirected fallback, and is explicit that undirected only means the two
+    endpoints share a neighbourhood. Never asserts the test exercises the code.
+    """
+    t2f = feats.test_to_fix_hops
+    und = feats.undirected_hops
+    if not feats.fix_count or not feats.test_count:
+        return ("endpoints incomplete on this arm (missing a fix-site or "
+                "test-target set) — nothing to gate")
+    if t2f >= 0:
+        return (f"the tests' call chain reaches the patched code in {t2f} "
+                f"directed hop(s) (test → fix) — the clean directed signal is "
+                f"present")
+    if und >= 0:
+        return (f"no directed test → fix path within bound; the endpoints only "
+                f"share a neighbourhood at {und} undirected hop(s) — weaker "
+                f"evidence, NOT proof the test exercises this code")
+    return "fix sites and test targets are not connected within the hop bound"
+
+
+def gather_check(instance_id: str, *, arm: str = "arm_b",
+                 manifest_path: Path = MANIFEST_PATH) -> CheckReport:
+    """Assemble the offline gate for one instance — no engine contacted.
+
+    Computes the directional structure features on the offline call graph, builds
+    the exact reachability Cypher that ``probe_engine`` would issue, and derives
+    the recommendation. Raises ``KeyError`` when the instance is unknown.
+    """
+    manifest = load_manifest(manifest_path)
+    if instance_id not in manifest:
+        raise KeyError(instance_id)
+    entry = manifest[instance_id].get(arm) or {}
+    fix = [int(x) for x in entry.get("fix_site_ids") or []]
+    test = [int(x) for x in entry.get("test_target_ids") or []]
+    band = int(entry.get("band") or 0)
+
+    g = load_instance_graph(instance_id, arm)
+    feats = _features.compute(g, fix, test, max_k=6)
+    cypher = (build_reach_cypher(fix[0], REACH_REL, 6, "out") if fix else "")
+
+    return CheckReport(
+        instance_id=instance_id,
+        arm=arm,
+        band=band,
+        fix_ids=fix,
+        test_ids=test,
+        features=_features.as_row(feats),
+        cypher=cypher,
+        recommendation=_recommendation(feats),
+        caveat=CAVEAT,
+    )
+
+
+def probe_engine(report: CheckReport, *, settings: Settings | None = None,
+                 transport=None, load: bool = True,
+                 direction: str = "out") -> CheckReport:
+    """Run a REAL bounded-reachability query against the live engine.
+
+    With ``load=True`` (the CLI default) the instance/arm subgraph is ingested
+    first so the query has data to traverse — a genuine ingestion→retrieval
+    round trip. With ``load=False`` (the API default) it queries whatever is
+    resident, which keeps the call read-only and fast. Either way the measured
+    latency and the exact Cypher are real; when the engine cannot be reached or
+    rejects the query the returned report carries ``engine_answered=False`` and a
+    clean note — never a fabricated score.
+    """
+    from dataclasses import replace
+
+    if not report.fix_ids:
+        return replace(report, engine_answered=False,
+                       engine_note="no fix-site id to seed the reachability query")
+
+    settings = settings or Settings.from_env()
+    own_transport = transport is None
+    try:
+        if transport is None:
+            from friction.client import connect
+            transport = connect(settings, prefer="bolt")
+    except Exception as exc:                      # noqa: BLE001 - engine optional
+        return replace(report, engine_answered=False,
+                       engine_note=f"engine unreachable: {str(exc)[:120]}")
+
+    try:
+        if load:
+            _live_load(transport, report)
+        node_id = report.fix_ids[0]
+        cypher = build_reach_cypher(node_id, REACH_REL, 6, direction)
+        prof = _reach_profile(transport, node_id, REACH_REL, 6, direction)
+        return replace(
+            report,
+            cypher=cypher,
+            engine_answered=bool(prof.answered),
+            latency_ms=prof.millis,
+            reach_hops=list(prof.hops),
+            reach_sizes=list(prof.sizes),
+            reach_direction=direction,
+            engine_note="" if prof.answered else "engine could not answer",
+        )
+    except Exception as exc:                       # noqa: BLE001 - surface cleanly
+        return replace(report, engine_answered=False,
+                       engine_note=f"engine could not answer: {str(exc)[:120]}")
+    finally:
+        if own_transport:
+            try:
+                transport.close()
+            except Exception:                      # noqa: BLE001
+                pass
+
+
+def _live_load(transport, report: CheckReport) -> None:
+    """Ingest the instance/arm subgraph so the reachability query has edges.
+
+    Uses the single-hop CREATE form the engine accepts (see
+    ``friction.loader``). Node identity is by the integer ``id`` the edges carry;
+    the reachable-SET size the query returns counts distinct nodes, so this is a
+    best-effort ingestion for the demo, not a claim of idempotency.
+    """
+    rows = _instance_edge_rows(report.instance_id, report.arm, report.band)
+    by_type: dict[str, list[dict]] = {}
+    for r in rows:
+        by_type.setdefault(r["type"], []).append(r)
+    for rel, rs in by_type.items():
+        stmt = ("UNWIND $rows AS row "
+                f"CREATE (a {{id: row.src}})-[:{rel}]->(b {{id: row.dst}})")
+        for i in range(0, len(rs), 500):           # engine caps UNWIND at 1024
+            transport.query(stmt, {"rows": rs[i:i + 500]})
+
+
+def _bar(value: float, hi: float, width: int = 24) -> str:
+    if hi <= 0:
+        return ""
+    filled = max(0, min(width, round(width * value / hi)))
+    return "█" * filled + "·" * (width - filled)
+
+
+def render_check(report: CheckReport) -> str:
+    r = report
+    lines = ["", f"  {r.instance_id}   (arm {r.arm[-1].upper()}, "
+             f"type-resolved; id band {r.band})"]
+    lines.append("  " + RULE)
+    lines.append(f"  endpoints: {len(r.fix_ids)} fix-site(s), "
+                 f"{len(r.test_ids)} test-target(s)")
+    lines.append("")
+    lines.append("  FEATURE BARS  (every value labelled with its direction)")
+    lines.append("  " + "-" * 52)
+
+    # Per-feature reference maxima for the bar; hops render as explicit values.
+    ref = {"fwd_growth": 3.0, "bwd_growth": 3.0, "overlap_ratio": 1.0,
+           "fanin": 50.0}
+    for name in _features.FEATURE_NAMES:
+        val = r.features.get(name, 0.0)
+        direction = FEATURE_DIRECTIONS[name]
+        if name in ("test_to_fix_hops", "undirected_hops"):
+            shown = "unreached" if val < 0 else f"{int(val)} hop(s)"
+            lines.append(f"    {name:<17} {shown:>12}   {direction}")
+        else:
+            bar = _bar(float(val), ref.get(name, 1.0))
+            lines.append(f"    {name:<17} {val:>9.3f}   {bar}")
+            lines.append(f"    {'':<17} {'':>9}   {direction}")
+    lines.append("")
+
+    lines.append("  RECOMMENDATION")
+    lines.append("  " + "-" * 52)
+    lines.append(f"    {r.recommendation}")
+    lines.append(f"    [{r.caveat}]")
+    lines.append("")
+
+    lines.append("  LIVE REACHABILITY  (in-engine, count(*) over [:CALLS*1..6])")
+    lines.append("  " + "-" * 52)
+    lines.append("    Cypher issued:")
+    lines.append(f"      {r.cypher or '(no fix-site id — no query issued)'}")
+    if r.engine_answered is None:
+        lines.append("    engine: not queried (offline gate)")
+    elif r.engine_answered:
+        arrow = "successors" if r.reach_direction == "out" else "predecessors"
+        sizes = ", ".join(str(s) for s in r.reach_sizes)
+        lines.append(f"    reachable-set size at hops {r.reach_hops} "
+                     f"({arrow}): [{sizes}]")
+        lines.append(f"    measured latency: {r.latency_ms:,.2f} ms "
+                     f"(bounded, flat in k)")
+    else:
+        lines.append(f"    engine could not answer — {r.engine_note}")
+        lines.append("    no fabricated score printed")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
 
@@ -415,16 +740,33 @@ def main(argv: list[str] | None = None) -> int:
                     "0.746 against a type-resolved one.")
     sub = parser.add_subparsers(dest="command")
 
+    chk_cmd = sub.add_parser(
+        "check", help="THE GATE: feature bars, recommendation, the exact Cypher "
+                      "and the measured live-engine latency for one instance")
+    chk_cmd.add_argument("--issue", required=True,
+                         help="instance id, e.g. django__django-10973")
+    chk_cmd.add_argument("--manifest", default=str(MANIFEST_PATH))
+    chk_cmd.add_argument("--arm", default="arm_b", choices=["arm_a", "arm_b"])
+    chk_cmd.add_argument("--no-engine", action="store_true",
+                         help="skip the live reachability query (offline gate)")
+
     cmp_cmd = sub.add_parser(
-        "compare", help="THE PRIMARY COMMAND: arm A vs arm B for one instance")
+        "compare", help="arm A vs arm B for one instance: nodes, edges, "
+                        "confirmed vs unconfirmed edges, and the delta")
     cmp_cmd.add_argument("--issue", required=True,
                          help="instance id, e.g. django__django-10973")
     cmp_cmd.add_argument("--manifest", default=str(MANIFEST_PATH))
     cmp_cmd.add_argument("--path-stats", default=str(PATH_STATS_PATH))
 
     sub.add_parser("list", help="per-arm node/edge counts and per-arm answerability")
+    sub.add_parser("precision", help="print docs/precision.md — what name matching costs")
+    sub.add_parser("connectivity", help="print docs/connectivity.md — the direction table")
     sub.add_parser("delta", help="print the precision ceiling and offender table")
     sub.add_parser("eval", help="print the scoped NO-GO evaluation and retraction")
+
+    srv_cmd = sub.add_parser("serve", help="run the FastAPI service with uvicorn")
+    srv_cmd.add_argument("--host", default="127.0.0.1")
+    srv_cmd.add_argument("--port", type=int, default=8000)
 
     try:
         args = parser.parse_args(argv)
@@ -432,6 +774,22 @@ def main(argv: list[str] | None = None) -> int:
         # argparse exits on an unknown subcommand or bad flags; return the code so
         # callers (and tests) get a nonzero value instead of a raised exit.
         return int(exc.code) if exc.code is not None else 2
+
+    if args.command == "check":
+        try:
+            report = gather_check(args.issue, arm=args.arm,
+                                  manifest_path=Path(args.manifest))
+        except KeyError:
+            print(f"unknown instance id: {args.issue!r} — run `friction list` to "
+                  f"see available ids.", file=sys.stderr)
+            return 1
+        except FileNotFoundError as exc:
+            print(f"cache not found ({exc}).", file=sys.stderr)
+            return 1
+        if not args.no_engine:
+            report = probe_engine(report)
+        print(render_check(report))
+        return 0
 
     if args.command == "compare":
         settings = Settings.from_env()
@@ -449,7 +807,17 @@ def main(argv: list[str] | None = None) -> int:
                   f"arms/path_stats.json under data/instances or data/shipped.",
                   file=sys.stderr)
             return 1
-        print(render_compare(a, b, args.issue, comparable, max_len=settings.max_len))
+        # Confirmed-vs-unconfirmed edge counts come from the committed precision
+        # report; skip the enrichment (never fail compare) when it is absent.
+        pr = None
+        try:
+            from friction.precision import load_report
+            if DELTA_PATH.exists():
+                pr = load_report(DELTA_PATH)
+        except Exception:                          # noqa: BLE001 - enrichment only
+            pr = None
+        print(render_compare(a, b, args.issue, comparable,
+                             max_len=settings.max_len, precision_report=pr))
         return 0
 
     if args.command == "list":
@@ -460,6 +828,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return 0
 
+    if args.command == "precision":
+        return _print_doc(PRECISION_PATH,
+                          "no precision report yet — run `uv run python -m friction.harness`.")
+
+    if args.command == "connectivity":
+        return _print_doc(CONNECTIVITY_PATH,
+                          "no connectivity report yet — run `uv run python -m friction.harness`.")
+
     if args.command == "delta":
         return _print_doc(DELTA_PATH,
                           "no delta report yet — run `uv run python -m friction.harness`.")
@@ -467,6 +843,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "eval":
         return _print_doc(EVAL_PATH,
                           "no evaluation report yet — run `uv run python -m friction.harness`.")
+
+    if args.command == "serve":
+        from friction.api import serve
+        serve(host=args.host, port=args.port)
+        return 0
 
     parser.print_help()
     return 2

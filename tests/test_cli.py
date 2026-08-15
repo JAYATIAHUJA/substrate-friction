@@ -289,3 +289,133 @@ def test_main_list_shows_instances_and_answerability(capsys):
     assert rc == 0
     assert "django__django-" in out
     assert "A nodes" in out and "B nodes" in out
+
+
+def test_main_precision_prints_the_cost_doc(capsys):
+    rc = cli.main(["precision"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "0.746" in out                 # the precision ceiling
+    assert "name matching costs" in out.lower() or "precision" in out.lower()
+
+
+def test_main_connectivity_prints_the_direction_table(capsys):
+    rc = cli.main(["connectivity"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "test -> fix" in out
+    # the undirected caveat must be present and undirected must NOT be sold as
+    # "the test exercises this code"
+    assert "shares a neighbourhood" in out.lower()
+
+
+# --------------------------------------------------------------------------
+# check — the gate (offline parts; the live query is @pytest.mark.engine)
+# --------------------------------------------------------------------------
+
+DEMO = "django__django-10973"           # arm B answered, comparable, 2 fix / 4 test
+
+
+def test_gather_check_returns_features_and_cypher():
+    report = cli.gather_check(DEMO)
+    # every scored feature is present
+    for name in cli._features.FEATURE_NAMES:
+        assert name in report.features
+    # the exact reachability query is the count(*) bounded form on the fix id
+    assert report.cypher.startswith("MATCH (s {id:")
+    assert "count(*)" in report.cypher
+    assert "*1..6" in report.cypher
+    assert str(report.fix_ids[0]) in report.cypher
+    # offline gate: engine not attempted
+    assert report.engine_answered is None
+
+
+def test_gather_check_unknown_id_raises_keyerror():
+    with pytest.raises(KeyError):
+        cli.gather_check("does__not-exist")
+
+
+def test_render_check_labels_every_feature_with_its_direction():
+    text = cli.render_check(cli.gather_check(DEMO))
+    for name in cli._features.FEATURE_NAMES:
+        assert name in text
+    # the directional labels are surfaced, not just the raw numbers
+    assert "outward from fix sites" in text
+    assert "directed test" in text
+
+
+def test_render_check_recommendation_carries_the_illustrative_caveat():
+    text = cli.render_check(cli.gather_check(DEMO))
+    assert "illustrative" in text
+    assert "does not beat patch-scope baselines" in text
+
+
+def test_render_check_never_sells_undirected_as_test_exercises_code():
+    text = cli.render_check(cli.gather_check(DEMO))
+    # the undirected feature's label must carry its disclaimer
+    assert "shares a neighbourhood" in text.lower()
+    # and the phrase must only ever appear negated
+    if "exercises this code" in text.lower():
+        assert "not \"the test exercises this code\"" in text.lower()
+
+
+def test_render_check_offline_reports_engine_not_queried():
+    text = cli.render_check(cli.gather_check(DEMO))
+    assert "not queried" in text.lower()
+    # the exact Cypher is shown even when the engine is not contacted
+    assert "count(*)" in text
+
+
+def test_probe_engine_clean_line_when_engine_unreachable():
+    # point Settings at a dead port; probe must degrade, never fabricate a score
+    from friction.config import Settings
+    dead = Settings.from_env()
+    object.__setattr__(dead, "bolt_uri", "bolt://127.0.0.1:1")
+    object.__setattr__(dead, "http_url", "http://127.0.0.1:1")
+    report = cli.probe_engine(cli.gather_check(DEMO), settings=dead)
+    assert report.engine_answered is False
+    assert report.latency_ms is None
+    text = cli.render_check(report)
+    assert "could not answer" in text.lower()
+    assert "no fabricated score" in text.lower()
+
+
+def test_main_check_offline_runs_without_engine(capsys):
+    rc = cli.main(["check", "--issue", DEMO, "--no-engine"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "FEATURE BARS" in out
+    assert "illustrative" in out
+    assert "count(*)" in out
+
+
+def test_main_check_unknown_issue_returns_nonzero(capsys):
+    rc = cli.main(["check", "--issue", "does__not-exist", "--no-engine"])
+    assert rc == 1
+
+
+def test_compare_confirmed_and_unconfirmed_edges_when_report_present():
+    from friction import precision as precision_mod
+    a, b, cmp = _compare_real(BOTH_REAL := "django__django-10973")
+    pr = precision_mod.load_report(cli.DELTA_PATH)
+    text = cli.render_compare(a, b, BOTH_REAL, cmp, precision_report=pr)
+    assert "confirmed" in text.lower()
+    assert "unconfirmed" in text.lower()
+
+
+def _compare_real(iid: str):
+    return cli.compare(iid)
+
+
+@pytest.mark.engine
+def test_check_live_engine_measures_real_latency():
+    from friction.client import connect
+    from friction.config import Settings
+    try:
+        connect(Settings.from_env(), prefer="bolt").close()
+    except Exception as exc:                       # noqa: BLE001
+        pytest.skip(f"engine not reachable: {exc}")
+    report = cli.probe_engine(cli.gather_check(DEMO))
+    assert report.engine_answered is True
+    assert report.latency_ms is not None and report.latency_ms >= 0
+    assert len(report.reach_sizes) == 6            # one size per hop 1..6
