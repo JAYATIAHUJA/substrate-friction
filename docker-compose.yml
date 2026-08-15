@@ -34,19 +34,24 @@ services:
     environment:
       RUST_MIN_STACK: "33554432"
       # -----------------------------------------------------------------------
-      # OBJECT-STORE DEFECT — READ THIS BEFORE SCALING THE WORKING SET.
+      # OBJECT-STORE DEFECT (github.com/hydra-db/hydradb/issues/81)
+      #   READ THIS BEFORE SCALING THE WORKING SET.
       #
       # CLOUD_PROVIDER=local is the engine's OWN documented local configuration
       # (from its README): a SlateDB LocalFileSystem backend. That backend has
-      # no conditional put. After ~6.1 GB of cumulative writes it reaches a
-      # compaction that needs PutMode::Update and fails with:
+      # no conditional put. Under SUSTAINED WRITES its manifest garbage
+      # collection / compaction eventually needs a conditional put (PutMode::Update)
+      # and fails with:
       #   "Operation put_opts with mode PutMode::Update not yet implemented
       #    by LocalFileSystem"
-      # From that point ALL writes fail permanently and query latency collapses
-      # by orders of magnitude — but READS KEEP WORKING, so the node still looks
-      # healthy (an earlier version of this project mis-measured a "150-node
-      # traversal ceiling" against exactly such a degraded store; see the
-      # retraction in docs/engine-scaling.md).
+      # This is reached after ~6.1 GB of cumulative writes. From that point the
+      # manifest GC is wedged: ALL writes fail permanently and query latency
+      # collapses by orders of magnitude — but READS KEEP SERVING, so the node
+      # still answers /readyz and still returns query results and therefore
+      # LOOKS HEALTHY. Read health is NOT liveness here. (An earlier version of
+      # this project mis-measured a "150-node traversal ceiling" against exactly
+      # such a silently-degraded store; see the retraction in
+      # docs/engine-scaling.md.)
       #
       # We keep the local backend anyway for judge simplicity (no S3 creds,
       # no MinIO wiring). It is SAFE here because setup.sh loads a DELIBERATELY
