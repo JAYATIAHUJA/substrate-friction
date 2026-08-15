@@ -101,6 +101,37 @@ _Source: `docs/connectivity.md`._
 
 ---
 
+## Dynamic COVERS — the edge type the spec called the hardest, and what it actually recovers
+
+The build spec named an executed `Test -> Function` edge — "COVERS" — **"the important one and the hardest to get right."** It had never been built. `src/friction/trace.py` and `src/friction/covers3.py` now build it: each instance's own `FAIL_TO_PASS` tests run under `sys.settrace` at the instance's `base_commit`, in a `uv`-provisioned interpreter matching that instance's django version (django 3.0 cannot import on the 3.12 host — it needs 3.9), and the **executed** `Test -> Function` call edges are recorded and folded into the type-resolved arm B graph.
+
+- **18 instances traced live, all succeeded.**
+- Representative cost: `django__django-11163` = **5,921** call edges / **3,215** functions entered / **6.9 s**; `django__django-10880` = **4,603** edges / **2,629** functions / **3.3 s**. The tracer runs at **~2 s per test module**.
+- **63%** of fix sites have their module executed by the tests.
+
+### The identity correction — reported, not hidden
+
+The first run recorded each executed function by its bare `co_name` (`save`, `__call__`), but arm B's nodes are SCIP **class-qualified** symbols. Only a module-level function could ever rejoin, so **69 of 23,043 COVERS edges mapped (0.3%)** and the connectivity gate read a false RED — no improvement. Qualifying the names (prefer `co_qualname` on 3.11+, otherwise reconstruct the class from `self`, or `cls` for a classmethod) lifted strict edge mapping from **0.3% to 27.6%** — about **90x**. This is the same class of error this project has retracted before — a false result produced by a naming artifact, not a property of the tests — so it is recorded here as a correction rather than quietly replaced.
+
+### The gate, after the fix (18 instances, directed test -> fix)
+
+| Corpus | test -> fix |
+|---|---|
+| Traced subset (18), static only | **11/18 (61%)** |
+| Traced subset (18), + COVERS (strict SCIP identity, qualified tracer) | **12/18 (67%)** &nbsp; &larr; **AMBER** |
+
+Folding COVERS in moves the gate by **+1** instance: `django__django-11265` flips disconnected -> connected. The improvement is **real and modest** — not a multiplier. **`61% -> 67%` does not rescue the prediction thesis, and we do not claim it does**; the headline remains the substrate finding.
+
+### The residual, diagnosed not hand-waved
+
+27.6% is not higher because `type(self).__name__` gives the **runtime subclass**, while the executed code object's file is the **base-class definition site** — so those edges key to a class SCIP does not have at that path. Closing that gap needs MRO-based definition-site resolution. The remainder is `<module>` import bodies and staticmethods.
+
+**The finding this supports — the contribution.** Static call graphs miss executed `test -> code` relationships, and even dynamic tracing only partially recovers them, because **runtime class identity and definition-site identity disagree**. That is a substrate observation, and it is the same spine as the headline: what a name-matched graph costs. COVERS does not change the headline; it corroborates it from the dynamic side.
+
+_Source: `docs/covers.md`, `src/friction/trace.py`, `src/friction/covers3.py`._
+
+---
+
 ## Finding 3 — the engine: bounded reachability stays cheap and always returns where path enumeration hits the 30 s wall
 
 The metric v2 asked for — the number of bounded paths between two node sets — is **#P-complete** (Valiant 1979). It is not slow; it is intractable, and on a dense django graph the engine's `algo.MSpaths` enumeration hit the hard **30,000 ms** timeout.
@@ -169,7 +200,8 @@ _Source: `docs/evaluation.md`, `docs/evaluation-v1-retracted.md`. Reproduce: `uv
 - **The directional gap is real.** `fix → test` is `0/44`, `test → fix` is `24/44 (55%)`, undirected is `43/44 (98%)` — and the `55% → 98%` gap is fixture / `setUp` / `parametrize` / dispatch edges a static call graph structurally cannot see.
 - **Python only.** The type-resolved arm depends on `scip-python`/pyright.
 - **`maxLen 6`.** Reachability is bounded at 6 hops.
-- **`n = 44`, single repository, underpowered.** A real feature-vs-baseline effect below ~0.15 AUC cannot be resolved on this sample.
+- **`n = 44`, single repository (django only), underpowered.** A real feature-vs-baseline effect below ~0.15 AUC cannot be resolved on this sample, and every measurement is on one repository.
+- **COVERS is partial.** The dynamic tracer maps only **27.6%** of executed `Test -> Function` edges into strict SCIP identity; the unmapped majority is the runtime-class-vs-definition-site mismatch (`type(self).__name__` is the runtime subclass, not the code object's definition site) plus `<module>` import bodies and staticmethods, which needs MRO-based definition-site resolution to close. Folding COVERS in moves the directed gate `11/18 -> 12/18` (`61% -> 67%`), a real but modest gain that does not rescue the predictor.
 - **Label contamination** (above): a non-trivial fraction of the `failed` labels are wrong.
 - **Arm B under-reports on untyped receivers** — the same property that makes precision a ceiling also means arm B is not ground truth, only a type-resolved reference.
 

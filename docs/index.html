@@ -122,6 +122,33 @@
     <strong>6.3&ndash;9.9&nbsp;ms</strong> — exactly, verified against a NetworkX reference at every
     hop count.</p>
 
+  <h2>Dynamic COVERS — the edge the spec called the hardest</h2>
+
+  <p>The build spec named an executed <code>Test&rarr;Function</code> edge "the important one and the
+    hardest to get right." It had never been built. We built it: each instance's own
+    <code>FAIL_TO_PASS</code> tests run under <code>sys.settrace</code> at its base commit, in a
+    <code>uv</code>-provisioned interpreter matching that Django version.
+    <strong>18 instances traced live, all succeeded</strong> (e.g. <code>django-11163</code>: 5,921
+    call edges in 6.9&nbsp;s).</p>
+
+  <div class="note warn">
+    <strong>A correction, reported not hidden.</strong> The first run keyed functions by bare name
+    while arm B nodes are class-qualified SCIP symbols, so only <strong>69 / 23,043 edges (0.3%)</strong>
+    mapped and the gate read a false RED. Qualifying the names lifted strict mapping to
+    <strong>27.6%</strong> — about <strong>90&times;</strong>.
+  </div>
+
+  <table>
+    <tr><th>Corpus (18 instances)</th><th>test &rarr; fix</th></tr>
+    <tr><td>static only</td><td class="mono">11 / 18 &nbsp;(61%)</td></tr>
+    <tr><td>+ COVERS (strict SCIP identity)</td><td class="mono">12 / 18 &nbsp;(67%)</td></tr>
+  </table>
+
+  <p class="small muted">One instance flips disconnected&rarr;connected. The gain is real and modest —
+    <span class="red">61%&rarr;67% does not rescue the predictor</span>. The unmapped 72% is the
+    runtime-class-vs-definition-site mismatch (<code>type(self).__name__</code> is the runtime subclass,
+    not the code object's definition site), not a naming bug.</p>
+
   <h2>What we do <em>not</em> claim</h2>
 
   <div class="note warn">
