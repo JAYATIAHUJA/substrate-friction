@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Substrate Friction — what name-matched code graphs cost</title>
+<meta name="description" content="Every AI coding agent builds a graph of your repo first. Aider, RepoGraph and LocAgent all build it by matching names. We measured what that costs.">
+<style>
+  :root {
+    --bg: #ffffff; --fg: #16181d; --muted: #5b6472; --line: #e3e6ea;
+    --card: #f7f8fa; --accent: #1f6feb; --red: #d1242f; --green: #1a7f37;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #2a313c;
+      --card: #161b22; --accent: #4493f8; --red: #ff7b72; --green: #3fb950;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --line: #2a313c;
+    --card: #161b22; --accent: #4493f8; --red: #ff7b72; --green: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 56px 22px 80px; }
+  h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 18px; }
+  h2 { font-size: 22px; letter-spacing: -0.01em; margin: 52px 0 14px; padding-top: 22px; border-top: 1px solid var(--line); }
+  p { margin: 0 0 16px; }
+  a { color: var(--accent); }
+  .lede { font-size: 19px; line-height: 1.6; color: var(--fg); }
+  .muted { color: var(--muted); }
+  .small { font-size: 14px; }
+  code, .mono { font-family: var(--mono); font-size: 0.92em; }
+  code { background: var(--card); padding: 2px 6px; border-radius: 5px; }
+  img { max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 8px; }
+  .btn {
+    display: inline-block; padding: 11px 20px; border-radius: 8px; text-decoration: none;
+    font-weight: 600; border: 1px solid var(--line); color: var(--fg); background: var(--card);
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin: 22px 0; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .stat .n { font-family: var(--mono); font-size: 27px; font-weight: 700; letter-spacing: -0.02em; display: block; }
+  .stat .l { font-size: 13px; color: var(--muted); display: block; margin-top: 5px; line-height: 1.4; }
+  table { border-collapse: collapse; width: 100%; margin: 18px 0; font-size: 15px; display: block; overflow-x: auto; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+  .note { background: var(--card); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 20px 0; font-size: 15px; }
+  .note.warn { border-left-color: var(--red); }
+  footer { margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+  .red { color: var(--red); font-weight: 600; }
+  .green { color: var(--green); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>What do name-matched code graphs cost?</h1>
+
+  <p class="lede">
+    Every AI coding agent that reads your repository builds a graph of it first. Aider's repo map,
+    RepoGraph and LocAgent all build that graph by matching identifier <em>names</em>. We built both
+    arms of the same Django commit — one name-matched, one type-resolved — and measured the gap.
+  </p>
+
+  <div class="cta">
+    <a class="btn primary" href="demo.html">Open the interactive demo &rarr;</a>
+    <a class="btn" href="https://github.com/areycruzer/substrate-friction">Source on GitHub</a>
+  </div>
+  <p class="small muted">The demo runs entirely in your browser — no network, no server. Press
+    <strong>Prune wrong edges</strong>.</p>
+
+  <img src="plots/prune.png" alt="Two panels of the same neighbourhood: the name-matched graph draws 21 edges with 9 highlighted red as unconfirmed by type resolution; the pruned panel keeps only the 12 confirmed edges.">
+  <p class="small muted">The fix-site neighbourhood of <code>get_combinator_sql()</code> in
+    <code>django__django-11490</code>. The name-matched arm draws <strong>21</strong> edges; type
+    resolution confirms <strong>12</strong>. <span class="red">Four of the nine red edges are one
+    collision</span> — <code>list.extend</code> name-bound to a GIS class.</p>
+
+  <h2>Three measured findings</h2>
+
+  <div class="grid">
+    <div class="stat"><span class="n">0.746</span><span class="l">precision ceiling of a name-matched graph, against type resolution</span></div>
+    <div class="stat"><span class="n">0%</span><span class="l">of instances where a fix site reaches its test by directed call edges</span></div>
+    <div class="stat"><span class="n">6.3&ndash;9.9<span class="small">ms</span></span><span class="l">bounded reachability, where path enumeration times out at 30,000&nbsp;ms</span></div>
+  </div>
+
+  <p><strong>1. The substrate.</strong> Precision ceiling <code>0.746</code>, recall <code>0.352</code>
+    of the true graph, Jaccard <code>0.3143</code>. A quarter of a name-matched graph's in-scope edges
+    do not survive type resolution, and they fail in a nameable way: <code>list.extend</code> bound to
+    a GIS class 139 times, <code>str.lower</code> to a template filter 125 times.</p>
+
+  <div class="note">
+    <strong>0.746 is a ceiling, and it reads in both directions.</strong> Pyright emits no occurrence
+    when a receiver's type is unknown — it never invents an edge. So an unconfirmed edge may still be
+    real. The <code>cursor</code> block of 54 edges is exactly that case: real
+    <code>self.connection.cursor()</code> calls where the name-matched arm was <span class="green">right</span>
+    and the type-resolved reference was incomplete. True precision is <strong>&ge; 0.746</strong>, never &le;.
+  </div>
+
+  <p><strong>2. The direction — unpublished elsewhere.</strong> Bounded at six hops, across 44 instances:</p>
+
+  <table>
+    <tr><th>Direction</th><th>Connected</th><th>Reading</th></tr>
+    <tr><td>fix &rarr; test (directed)</td><td class="mono red">0 / 44 &nbsp;(0%)</td><td class="muted">Code does not call tests. This direction was backwards all along.</td></tr>
+    <tr><td>test &rarr; fix (directed)</td><td class="mono">24 / 44 &nbsp;(55%)</td><td class="muted">The clean semantic: the test's call chain reaches the change.</td></tr>
+    <tr><td>undirected</td><td class="mono">43 / 44 &nbsp;(98%)</td><td class="muted">"Shares a neighbourhood" — <em>not</em> "the test exercises this code".</td></tr>
+  </table>
+
+  <p class="small muted">The 55&rarr;98 gap is the pytest fixture, <code>setUp</code> and parametrize
+    closure that a static call graph structurally cannot see.</p>
+
+  <p><strong>3. The engine.</strong> Counting bounded simple paths is #P-complete (Valiant 1979), and
+    it shows: on one 34,000-node graph at Django's real density, <code>algo.MSpaths</code> took
+    <strong>14,539&nbsp;ms</strong> and timed out at the 30,000&nbsp;ms ceiling from the busiest
+    source, while bounded reachability answered the same graph in
+    <strong>6.3&ndash;9.9&nbsp;ms</strong> — exactly, verified against a NetworkX reference at every
+    hop count.</p>
+
+  <h2>What we do <em>not</em> claim</h2>
+
+  <div class="note warn">
+    <p style="margin:0 0 10px"><strong>The friction predictor does not work.</strong> Best feature
+      <code>test_to_fix_hops</code> reaches AUC <code>0.518</code> against an <code>f2p_count</code>
+      baseline of <code>0.653</code>; every bootstrap CI brackets zero; n=44 cannot resolve small
+      effects. That is the reported result.</p>
+    <p style="margin:0" class="small">Two earlier claims from this project are retracted: v1's AUC
+      0.565 (measured on a graph where 73.9% of resolved call edges were name-collision artifacts)
+      and v2's 0.631 (path-multiplicity only, and it lost to patch size). Per-instance agent-failure
+      prediction is <em>already solved</em> at AUC 0.841 (arXiv 2604.00594) — we do not claim it.</p>
+  </div>
+
+  <h2>Read the measurements</h2>
+  <p class="small">
+    <a href="precision.md">precision.md</a> — the two-arm delta and the offender table &middot;
+    <a href="connectivity.md">connectivity.md</a> — the direction finding &middot;
+    <a href="latency.md">latency.md</a> — both queries on one graph &middot;
+    <a href="evaluation.md">evaluation.md</a> — the negative result and the retractions &middot;
+    <a href="graph-delta.md">graph-delta.md</a> — the raw join
+  </p>
+
+  <h2>Run it</h2>
+  <p class="small mono" style="background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto">
+    git clone https://github.com/areycruzer/substrate-friction<br>
+    cd substrate-friction &amp;&amp; ./setup.sh<br>
+    friction check --issue django__django-11490
+  </p>
+
+  <footer>
+    Built for <strong>Hack Hydra 2026</strong>, Track 02 — code as graphs. Runs on the open-source
+    HydraDB engine, pinned at <span class="mono">02a4002</span>. MIT licensed; the engine is AGPL-3.0.
+    Contributed <a href="https://github.com/hydra-db/hydradb/issues/81">issue #81</a> and
+    <a href="https://github.com/hydra-db/hydradb/pull/82">PR #82</a> upstream.
+  </footer>
+
+</div>
+</body>
+</html>
