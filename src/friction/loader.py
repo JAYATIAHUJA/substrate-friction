@@ -101,14 +101,25 @@ def emit_ndjson(table: SymbolTable, edges: list[Edge], out_dir: Path) -> dict[st
     return {"nodes": nodes_path, "edges": edges_path}
 
 
-def node_statement(caps: Capabilities, label: str) -> str:
-    props = NODE_PROPS[label]
+def node_statement_for(caps: Capabilities, label: str, props: list[str]) -> str:
+    """Build the upsert statement for ``label`` over an EXPLICIT prop list.
+
+    The live engine's UNWIND checks every referenced field against every row, so
+    the SET clause must name exactly the props the rows carry — no more. This
+    variant takes the prop list explicitly so ``load`` can derive it from the
+    rows themselves (schema-adaptive), while ``node_statement`` keeps the fixed
+    v1 ``NODE_PROPS`` contract its tests pin.
+    """
     template = NODE_FORMS[caps.node_loader_form]
     if caps.node_loader_form == "create_inline":
         body = ", ".join(f"{p}: row.{p}" for p in props)
         return template.format(label=label, props=body)
     sets = ", ".join(f"n.{p} = row.{p}" for p in props if p != "id")
     return template.format(label=label, sets=sets)
+
+
+def node_statement(caps: Capabilities, label: str) -> str:
+    return node_statement_for(caps, label, NODE_PROPS[label])
 
 
 def edge_statement(caps: Capabilities, rel_type: str) -> str:
@@ -138,12 +149,20 @@ def load(transport, caps: Capabilities, out_dir: Path,
         label = row.pop("label")
         by_label[label].append(row)
 
-    # All nodes before any edges.
-    for label in ("File", "Class", "Function"):
+    # All nodes before any edges. Load File/Class before Function (edge
+    # endpoints), then any other label the file carries. Deriving the SET props
+    # from the rows themselves keeps this loader schema-agnostic: v1 graph nodes
+    # carry NODE_PROPS[label]; the Task-7 arm nodes carry a leaner {sid,name,qual}.
+    # A fixed v1-shaped statement rejected every arm batch on the live engine
+    # ("UNWIND row 0 is missing field cyclomatic").
+    ordered = ["File", "Class", "Function"]
+    labels = ordered + [lbl for lbl in by_label if lbl not in ordered]
+    for label in labels:
         rows = by_label.get(label, [])
         if not rows:
             continue
-        statement = node_statement(caps, label)
+        props = list(rows[0].keys())  # rows are uniform per label in every emit
+        statement = node_statement_for(caps, label, props)
         for chunk in _chunks(rows, batch_size):
             transport.query(statement, {"rows": chunk})
         counts[label] += len(rows)

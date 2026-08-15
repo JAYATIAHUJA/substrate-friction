@@ -1,99 +1,55 @@
 # Evaluation
 
-## Read this first — the headline is a truncation artifact, and the null holds
+## RETRACTION — v1's null is withdrawn
 
-- The engine was queried at **maxLen 6**, the metric's definition, for all **43** endpoint-bearing instances.
-- It **completed** the friction query for **23** of them and **could not answer 20** — **16 hit the 29999 ms timeout** and **4 exhausted the memory pool** on the dense 6-hop traversal. Those 20 are recorded as ENGINE-UNANSWERED and are **not** back-filled from any reference.
-- Of the 23 answered, 16 returned at least one path; the rest returned zero (fix and test disconnected within the subgraph).
+v1 reported **AUC 0.565 / p=0.726** and presented it as a test of the thesis that call-graph *friction* predicts SWE-bench agent failure. That measurement was taken on a tree-sitter, name-matched call graph in which **73.9% of the resolved CALLS edges were name-collision artifacts** — a "bare name is globally unique -> resolve it" fallback wired `super()` to `loader_tags.py::BlockNode.super` 1,321 times, `.lower()` to `defaultfilters.lower` 259 times, `.extend()` to a GIS class 222 times (see `docs/call-resolution-audit.md`). A metric measured on a graph that is three-quarters fiction did not test the thesis; it measured name collisions. **v1's AUC 0.565 / p=0.726 is retracted.** Retracting it loudly is worth more than the original claim. The v1 subgraph analysis is preserved, retracted, in `docs/evaluation-v1-retracted.md`.
 
-**Equal-weights friction AUC over the 23 engine-answered instances = 0.780** (point-biserial r=0.428, p=0.0416). Taken alone this looks strong. **It is not a real result.** Two independent checks show it is an artifact of the engine's `pathCount = 20` truncation:
+This file replaces it with an evaluation on a *type-resolved* substrate.
 
-1. **Fidelity recall = 0.0264** — over the same instances the engine returned 1021 paths where the full networkx enumeration over the identical edge set finds 38720. The engine sees 2.6% of the paths (validity precision 1.0: the ones it does return are all real). The metric is defined over path multiplicity, so at 2.6% recall it is scoring truncation noise, not structure.
-2. **Re-scoring the SAME 23 instances from the full reference enumeration (reference-derived, no pathCount cap) gives AUC 0.576** (r=0.119, p=0.587) — the signal collapses to a null. Same instances, same edges, same maxLen; the only thing removed is the truncation. And over **all 43 endpoint-bearing instances the reference gives AUC 0.565** (r=0.055, p=0.726), which reproduces the prior full-graph baseline (AUC ~0.567, a clean null) on the real substrate.
+## What was actually measured
 
-**Verdict: NO-GO.** The friction metric does not predict agent failure. The engine-computed 0.780 is a demonstrated `pathCount` truncation artifact; the truncation-free measurement on the identical data is a null (0.565, p=0.726). A null confirmed on the real engine substrate is the honest result, and it agrees with the prior reference baseline. Nothing was tuned, dropped, or reframed to move a number in either direction.
+- **50 django instances**, of which **28 are `comparable`** (both arms mapped the fix and test endpoints onto the same identities — the only cohort on which an arm-A-vs-arm-B contrast is meaningful).
+- Two call graphs per instance: **arm A** = name-matched (what Aider / RepoGraph / LocAgent build), **arm B** = type-resolved via `scip-python` (pyright-backed).
+- Friction is computed from the committed path_stats.json (pinned live-engine run). That cache stores per-arm path COUNTS, not node lists, so only f1 (multiplicity) is reconstructable offline; the equal-weights score is therefore monotone in f1 and AUC(friction) == AUC(f1). f2-f6 require a live path-list pass not run here. (The run was assembled across wiped local-backend generations because the store holds only ~13 instances per generation.)
 
-## Engine query latency
+## The comparison table (all AUC vs `failed`, positive class = failure)
 
-- Friction path query (`algo.MSpaths`, the metric-defining query), answered instances only: median **14614.5 ms**, p95 **29041.27 ms**, max **29948.75 ms** (n=23). This is the cost of computing friction for one instance, and it sits at the engine's 29999 ms ceiling.
-- Fan-in query (`algo.SSpaths`, maxLen 1) is sub-second and never failed.
-- All engine queries pooled: median **18.21 ms**, p95 **30011.13 ms**, max **30015.39 ms** (n=87). The low pooled median is the cheap fan-in queries; it does not represent the cost of the metric.
+Headline set: **arm A engine-answered, comparable cohort** (n = 18); friction and the cheap baselines are scored on the *same* instances. `failed` ground truth = `20241029_OpenHands-CodeAct-2.1-sonnet-20241022`.
 
-## Subgraph completeness
+| Predictor | AUC | n | note |
+|---|---|---|---|
+| Friction, arm A (name-matched) | 0.631 | 18 | 16 of 18 answered instances had >=1 bounded path |
+| Friction, arm B (type-resolved) | 0.500 | 3 | only 3 of 28 comparable instances were engine-answerable (rest timed out at 29999 ms) |
+| `patch_lines` | 0.637 | 18 | scope baseline |
+| `patch_files` | 0.581 | 18 | scope baseline |
+| `f2p_count` | 0.569 | 18 | fail-to-pass count |
+| `statement_chars` | 0.562 | 18 | problem-statement length |
+| Published: statement text only (arXiv 2604.00594) | 0.787 | — | **published, NOT reproduced here** |
+| Published: best combined (arXiv 2604.00594) | 0.841 | — | **published, NOT reproduced here** |
 
-**pct_untruncated = 0%** (0/50). Every subgraph hit its node budget before completing 6 hops (hops_completed 3-5), so even a successful engine query traverses a partial neighborhood. This is the second truncation in the stack (budget truncation of the subgraph, on top of pathCount truncation of the result).
+The two published rows are context from the literature, not measurements from this project; they are marked so no reader mistakes them for ours.
 
-## Fidelity
+## The three questions that decide whether this is a finding
 
-### a. Engine vs reference on the SAME subgraph (pathCount truncation)
+**1. Does arm B beat arm A?  UNDETERMINED.** 
+arm B answered only 3 of 28 comparable instances (< 10); its AUC is not a measurement. The type-resolved graph is denser and its bounded fix->test enumeration times out on all but a handful of instances, so at maxLen 6 the type-resolved arm is *engine-unanswerable at cohort scale*. That the richer graph is the one the engine cannot traverse is itself an honest result — but it means the headline arm-B-vs-arm-A comparison cannot be made on this hardware, and we do not manufacture one from n = 3.
 
-Over 22 answered instances with a fully-enumerable reference (1 excluded because the reference enumeration hit its cap): engine returned **1021** paths, the reference found **38720**. Overlap recall = **0.0264**, validity precision = **1.0**. Largest shortfall: `django__django-11740`. Recall this far below 0.9 is the fidelity guard firing: the metric as the engine computes it is pathCount-truncated and its correlation cannot be believed. See `docs/fidelity.md`.
+**2. Does either beat `patch_lines`?  NO.** Friction arm A scores AUC 0.631 against `patch_lines` 0.637 on the same 18 instances (difference -0.006). Structure adds nothing over raw patch scope; the cheapest possible predictor is at least as good. Arm B cannot be entered into this comparison (question 1).
 
-### b. Engine-on-subgraph vs reference on the FULL graph (budget truncation)
+**3. Is n big enough to say anything?  NO.** Bootstrap 95% CI on AUC(friction arm A) - AUC(`patch_lines`) over the 18 shared instances is **[-0.472, 0.435]** (point -0.006, 2000 resamples). The interval spans zero and most of the achievable range. Underpowered by roughly an order of magnitude; a real effect below ~0.1 AUC cannot be resolved at this n.
 
-Of **36** endpoint-bearing instances whose fix and test are connected within 6 hops in the FULL repo graph, the engine returned a path for only **16** (cohort connectivity recall **0.4444**) — the rest were lost to a timeout, an OOM, or a subgraph budget that dropped the connecting hop. Restricted to instances the engine actually answered, connectivity recall is **1.0** (16/16): when the query finishes, the budgeted subgraph did preserve the short connections. The cost of truncation is concentrated in the ~half of instances the engine cannot answer at all.
+## Verdict
 
-**Verdict: NO-GO** — friction score vs failure AUC **0.780** on n=23 engine-answered instances (ground truth `20241029_OpenHands-CodeAct-2.1-sonnet-20241022`), but this is a pathCount truncation artifact (fidelity recall 0.0264); the truncation-free number is a null (0.565). Scored components are engine-derived; the 0.576/0.565 comparison figures are reference-derived and labelled as such.
+**NO-GO on the prediction thesis.** On a type-resolved substrate, friction (arm A) does not beat `patch_lines` (AUC 0.631 vs 0.637), the type-resolved arm B is not engine-answerable at cohort scale, and the sample is underpowered by roughly an order of magnitude. The v1 null is retracted, and the honest replacement is not a positive result. The *supporting* structural finding — that a name-matched graph's edges have a precision ceiling of 0.746 against the type-resolved graph (Task 6, `docs/graph-delta.md`) — stands on its own as the measurement of what name matching costs; it is not rescued into a prediction claim it cannot support.
 
-## Per-component AUC (engine-answered instances)
+## Label contamination — a limit of the ground truth, not the metric
 
-| Component | AUC |
-|---|---|
-| `f1` | 0.606 |
-| `f2` | 0.788 |
-| `f3` | 0.799 |
-| `f4` | 0.553 |
-| `f5` | 0.500 |
-| `f6` | 0.591 |
-
-Best single component: **`f3`** (AUC 0.799). These per-component AUCs inherit the same pathCount-truncation artifact as the composite and should not be read as evidence on their own.
-
-## Weights (fitted, train-only) 
-
-Logistic fit on a 70% train split, evaluated on the held-out 30%. Train AUC 0.898, **held-out AUC 0.542** — with n=23 the fitted model does not generalise beyond chance, independent of the truncation issue.
-
-| Component | Weight |
-|---|---|
-| `f1` | 0.282 |
-| `f2` | 0.251 |
-| `f3` | 0.295 |
-| `f4` | 0.164 |
-| `f5` | 0.000 |
-| `f6` | 0.008 |
-
-## Confound checks
-
-| Check | Value |
-|---|---|
-| friction vs repo loc | -0.113 |
-| friction vs patch lines | 0.379 |
-| repo loc auc | 0.568 |
-| patch lines auc | 0.640 |
-
-friction-vs-repo-loc and friction-vs-patch-lines are Pearson correlations; the `*_auc` rows report whether repo LOC or patch size predict failure directly. Patch size predicts failure at AUC 0.640 on this subset — a plainer predictor than friction, and a reminder the answered subset is small and selected.
-
-## Excluded / unanswered instances
-
-- **20 engine-unanswered** (timeout/OOM at maxLen 6): not scored, not substituted. This is ~half the endpoint-bearing cohort; the answered set is therefore a sample selected for cheap traversability, and the headline AUC must be read in that light.
-- **7 empty-endpoint** instances (an endpoint set is empty → zero friction by construction): 4 failed, 3 resolved.
-
-| Set | AUC |
-|---|---|
-| engine-answered only (n=23) | 0.780 |
-| + empty-endpoint at minimum friction (n=30) | 0.631 |
-
-Adding the empty-endpoint instances back at minimum friction moves the engine number from 0.780 to 0.631; neither survives the fidelity check above.
-
-## Stability across systems (engine-answered instances)
-
-| System | AUC |
-|---|---|
-| `20241029_OpenHands-CodeAct-2.1-sonnet-20241022` | 0.780 |
-| `20240402_sweagent_gpt4` | 0.836 |
-| `20240620_sweagent_claude3.5sonnet` | 0.770 |
-
-The across-system agreement is on the same truncation-artifact substrate, so it shows the artifact is stable, not that the metric is.
+SWE-Bench+ (arXiv 2410.06992) measured **32.7% solution leakage** and **31% weak tests** on SWE-bench, and OpenAI reports **59.4%** of o3 failures on SWE-bench Verified were test flaws and no longer recommends the benchmark. A structural feature that correlated with test weakness would be predicting label noise, not agent difficulty. This is a limitation of the ground truth, not of the metric, and it is stated here so no AUC in this file is read as cleaner than the labels underneath it.
 
 ## Reproducibility
 
-Every number here is regenerated by `uv run python -m friction.harness` from `data/instances/subgraphs.json`, `data/instances/annotations.json`, the per-instance `subgraphs/<id>/edges.ndjson` and `graphs/<id>/edges.ndjson`, and the live engine (recorded to `data/instances/engine_cache.json`; `FRICTION_REQUERY=1` forces a fresh pass). No figure is hand-entered.
+Every number above is regenerated by `uv run python -m friction.harness` from `data/instances/arms/path_stats.json` (the committed, pinned live-engine path structure), `data/instances/arms/manifest.jsonl`, `data/instances/annotations.json`, and the offline-cached SWE-bench Verified rows under `data/swebench`. The engine is **not** re-queried; the path structure is read from the committed cache exactly as the task specifies for an engine-down run. No figure is hand-entered.
+
+## Appendix pointer — the retracted v1 truncation analysis
+
+For completeness, the v1 subgraph/engine analysis (the demonstrated `pathCount` truncation artifact and its fidelity guard) is regenerated into `docs/evaluation-v1-retracted.md`: engine-computed AUC 0.780 shown to be a truncation artifact (fidelity recall on that run was the guard's trigger), collapsing to AUC 0.565 truncation-free. It is retained, retracted, as evidence — not as a result.
