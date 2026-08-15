@@ -101,7 +101,7 @@ _Source: `docs/connectivity.md`._
 
 ---
 
-## Finding 3 — the engine: bounded reachability is exact, flat, and ~2,500x faster than enumeration
+## Finding 3 — the engine: bounded reachability stays cheap and always returns where path enumeration hits the 30 s wall
 
 The metric v2 asked for — the number of bounded paths between two node sets — is **#P-complete** (Valiant 1979). It is not slow; it is intractable, and on a dense django graph the engine's `algo.MSpaths` enumeration hit the hard **30,000 ms** timeout.
 
@@ -111,11 +111,11 @@ The fix is to ask a different, tractable question with the same intuition: **bou
 MATCH (s {id: 41000000000})-[:CALLS*1..6]->(n) RETURN count(*) AS n
 ```
 
-Against a walk-correct networkx reference this is **exact at every k** and **flat in k**: **3–12 ms at k = 1..6** on an out-degree-3 graph — the same density where path enumeration timed out at 30,000 ms. That is roughly **2,500x**.
+Against a walk-correct networkx reference this is **exact at every k** — a standing `@pytest.mark.engine` test on a 1,000-node out-degree-3 graph. Its cost is bounded by the visited **set** (≤ graph size), not by walk volume, so it always returns. Measured honestly on **one 34,000-node graph at django density** (both-degree ≈ 2.9), `count(*)` answers in **6–10 ms** from a typical source and up to **6.5 s** from the busiest hub (which reaches 12,710 nodes), while `algo.MSpaths` path enumeration on that **same graph** costs **~15 s** from mid-graph seeds and **~24 s** from a hub — grazing the **30 s** ceiling, and timing out on it in other cold runs. The honest ratio is **~1,500–2,300× at the typical operating point, and unbounded — enumeration times out — at the busiest source** (`docs/latency.md`). The two graphs are kept distinct: at 1,000 nodes enumeration finishes in ~200 ms and does not time out; the 30,000 ms timeout is the ~34,000-node django graph. The earlier single "~2,500×" came from comparing those two different graphs and is retracted.
 
 ![Reachability latency vs the enumeration wall](docs/plots/latency.png)
 
-The exactness claim is a standing `@pytest.mark.engine` regression test: it seeds a fresh 1,000-node out-degree-3 graph, rebuilds it in networkx, and asserts the engine's `count(*)` equals the reachable-set size at every `k = 1..6` — zero mismatches. When the gate runs `friction check` it issues that same query live and prints its own measured latency: **10.97 ms** against the dev store, **20–27 ms** from a clean clone.
+The exactness claim is a standing `@pytest.mark.engine` regression test: it seeds a fresh 1,000-node out-degree-3 graph, rebuilds it in networkx, and asserts the engine's `count(*)` equals the reachable-set size at every `k = 1..6` — zero mismatches. When the gate runs `friction check` it issues that same query live and **prints its own measured latency — run `friction check` to see yours** on your store.
 
 **A syntax finding that matters:** `RETURN count(n)` where `n` is a node is **rejected** by this build the moment a traversal precedes it (`"property values support integer, float, boolean, and string literals"`). The working form is `RETURN count(*)`; `count(n.id)` also works. The keystone query only parses in the `count(*)` form.
 
@@ -123,11 +123,11 @@ The exactness claim is a standing `@pytest.mark.engine` regression test: it seed
 
 **Both arms resident at once, in disjoint id bands.** Arm A and arm B of the same commit live in one `default` graph in non-overlapping integer-`id` bands, so "diff the name-matched graph against the type-resolved graph" is a single-engine operation, not a cross-database join. Every edge count in Finding 1 depends on this.
 
-**Bounded reachability, in-engine.** `MATCH (s {id:N})-[:CALLS*1..k]->(n) RETURN count(*)` lowers to a masked GraphBLAS BFS whose cost is `O(m)` per hop, bounded by the _visited set_, not by walk volume. The frontier is finite; the path set is not. That is the whole reason the latency is flat in `k` where enumeration is exponential. The variable-length pattern carries a mandatory upper bound, is single-typed, and matches on integer `id`.
+**Bounded reachability, in-engine.** `MATCH (s {id:N})-[:CALLS*1..k]->(n) RETURN count(*)` lowers to a masked GraphBLAS BFS whose cost is `O(m)` per hop, bounded by the _visited set_, not by walk volume. The frontier is finite; the path set is not. That is why the cost is bounded by the reachable-set size and always returns — flat in `k` for a typical source, and still only a few seconds from the busiest hub (`docs/latency.md`) — where enumeration is exponential in `k`. The variable-length pattern carries a mandatory upper bound, is single-typed, and matches on integer `id`.
 
 **Why a vector index structurally cannot do this.** The relations here — a bounded reachable set, a directed `test → fix` connection, the confirmed-vs-unconfirmed edge split — are defined over **reachable sets and cuts in a specific edge set.** Paths and cuts do not exist in an embedding space. Two functions with near-identical text sit adjacent in vector space while lying on completely disconnected call paths; nearest-neighbour retrieval is blind to precisely the property being measured. No embedding recovers "how many bounded call-graph paths connect these two nodes, and in which direction" — that is a graph traversal over resolved edges, which is why the substrate is a graph engine.
 
-_Source: `src/friction/reach.py`, `tests/test_reach.py` (`@pytest.mark.engine`), `docs/engine-scaling.md`. Pinned engine commit `02a40025d2d57e97ab2754c8256219cdbfeab379` (v0.1.1, AGPL-3.0), recorded in `docs/pinned-engine-commit.txt`._
+_Source: `docs/latency.md` (both queries measured on one django-scale graph; reproduce with `uv run python -m scripts.latency_measure`), `src/friction/reach.py`, `tests/test_reach.py` (`@pytest.mark.engine`), `docs/engine-scaling.md`. Pinned engine commit `02a40025d2d57e97ab2754c8256219cdbfeab379` (v0.1.1, AGPL-3.0), recorded in `docs/pinned-engine-commit.txt`._
 
 ---
 
@@ -173,7 +173,7 @@ _Source: `docs/evaluation.md`, `docs/evaluation-v1-retracted.md`. Reproduce: `uv
 - **Label contamination** (above): a non-trivial fraction of the `failed` labels are wrong.
 - **Arm B under-reports on untyped receivers** — the same property that makes precision a ceiling also means arm B is not ground truth, only a type-resolved reference.
 
-Every number in this README traces to `docs/precision.md`, `docs/graph-delta.md`, `docs/connectivity.md`, `docs/evaluation.md`, `docs/engine-scaling.md`, `src/friction/reach.py`, `tests/test_reach.py`, or `docs/demo.html`.
+Every latency figure in this README traces to `docs/latency.md` (measured on one django-scale graph); every other number traces to `docs/precision.md`, `docs/graph-delta.md`, `docs/connectivity.md`, `docs/evaluation.md`, `docs/engine-scaling.md`, `src/friction/reach.py`, `tests/test_reach.py`, or `docs/demo.html`. The one exception is the **v1 name-collision counts** (e.g. `super()` → `BlockNode.super` **1,321×**): those are v1 tree-sitter build-log figures, recorded in the retraction string in `src/friction/harness.py`, and are **not** recomputable from committed data — the v1 name-matched caches are gitignored, so they are cited as build-log figures, not as reproducible measurements.
 
 ---
 

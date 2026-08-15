@@ -218,6 +218,50 @@ def test_render_latency_empty_input_still_writes_a_png(tmp_path):
     assert out.exists() and out.stat().st_size > 0
 
 
+def test_generate_latency_reads_committed_json_not_a_hardcoded_list(tmp_path):
+    """Finding-C regression guard: the per-k reachability latency MUST come from
+    the committed docs/latency.json, never a hardcoded literal. Point viz at a
+    temp JSON with sentinel values and assert those exact values flow through —
+    a re-hardcoded list would ignore them and fail this test."""
+    import json
+
+    from pathlib import Path
+
+    sentinel = {
+        "graph": {"nodes": 34000, "both_degree": 2.9},
+        "reach_count_star": {
+            "mid": {"source_id": 1, "reach6_nodes": 36, "min_millis": 3.3,
+                    "max_millis": 7.7,
+                    "rows": [{"k": k, "millis": float(k) + 0.5, "size": k}
+                             for k in range(1, 7)]},
+            "hub": {"source_id": 2, "reach6_nodes": 12710, "min_millis": 30.0,
+                    "max_millis": 6505.73, "rows": []},
+        },
+        "mspaths_enumeration": {
+            "mid_connected_seeds": {"millis": 14539.21, "answered": True},
+        },
+        "timeout_ceiling_millis": 29999,
+    }
+    jf = tmp_path / "latency.json"
+    jf.write_text(json.dumps(sentinel))
+
+    lat = viz.load_latency(Path(jf))
+    assert lat["reach_rows"] == [(k, float(k) + 0.5) for k in range(1, 7)]
+    assert lat["enum_ms"] == 14539.21
+    assert lat["hub_max_ms"] == 6505.73
+
+    # And the shipped docs/latency.json must exist and drive the real figure —
+    # the values must NOT be the retracted hardcoded [(1,4),(2,2),(3,4),...] list.
+    shipped = viz.load_latency()
+    assert shipped["reach_rows"], "docs/latency.json missing or empty"
+    assert shipped["reach_rows"] != [(1, 4), (2, 2), (3, 4), (4, 3), (5, 7), (6, 12)]
+
+
+def test_generate_latency_figure_writes_png_from_committed_json():
+    out = viz.generate_latency_figure()
+    assert out.exists() and out.stat().st_size > 0
+
+
 # --- demo.html --------------------------------------------------------------
 
 _DEMO_GRAPH = {

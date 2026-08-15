@@ -81,10 +81,13 @@
 
 <div id="cy"></div>
 
-<footer>Bounded fix→test reachability answers in 3–12&nbsp;ms via in-engine
-  <code>count(*)</code> over <code>[:CALLS*1..k]</code> where path enumeration
-  timed out at 30,000&nbsp;ms on the same density. Graph data embedded inline;
-  Cytoscape.js vendored locally — this page needs no network.</footer>
+<footer>Bounded fix→test reachability via in-engine <code>count(*)</code> over
+  <code>[:CALLS*1..k]</code> always returns; on one 34k-node django-density graph
+  it answers in 6–10&nbsp;ms (typical source) to 6.5&nbsp;s (busiest hub) while
+  path enumeration on that same graph runs to tens of seconds — up to the
+  30,000&nbsp;ms ceiling (see docs/latency.md). Graph data embedded inline;
+  Cytoscape.js vendored
+  locally — this page needs no network.</footer>
 
 <!-- vendored: docs/vendor/cytoscape.min.js — Cytoscape.js 3.30.2 (MIT), inlined for offline use -->
 <script>/**

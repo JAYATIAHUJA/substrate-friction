@@ -245,6 +245,47 @@ def render_truncation(engine: PathSet, full: PathSet, out_path: Path,
 _ENGINE_CACHE = Path("data/instances/engine_cache.json")
 _REF_CACHE = Path("data/instances/ref_cache.json")
 _PLOTS = Path("docs/plots")
+_LATENCY_JSON = Path("docs/latency.json")
+
+# Fallback per-k reachability latency, used ONLY if docs/latency.json is missing
+# (it is committed, so this is a clean-clone safety net, not the source of truth).
+# These are the mid-source cold numbers from the committed docs/latency.json.
+_LATENCY_FALLBACK_REACH = [(1, 8.22), (2, 6.33), (3, 6.38),
+                           (4, 7.84), (5, 6.87), (6, 9.88)]
+_LATENCY_FALLBACK_ENUM_MS = 14539.21
+
+
+def load_latency(path: Path = _LATENCY_JSON) -> dict:
+    """Read the committed latency measurement (scripts/latency_measure.py).
+
+    viz never touches the engine; it reads the committed docs/latency.json so the
+    figure is reproducible from a clean clone with the engine down. Returns the
+    mid-source reachability rows, the measured enumeration cost, and the
+    busiest-hub context for the caption.
+    """
+    if path.exists():
+        data = json.loads(path.read_text())
+        mid = data["reach_count_star"]["mid"]
+        hub = data["reach_count_star"]["hub"]
+        enum = data["mspaths_enumeration"]["mid_connected_seeds"]
+        reach_rows = [(r["k"], r["millis"]) for r in mid["rows"]]
+        enum_ms = enum["millis"] if enum.get("answered") \
+            else data["timeout_ceiling_millis"]
+        return {
+            "reach_rows": reach_rows,
+            "enum_ms": enum_ms,
+            "reach_min": mid["min_millis"], "reach_max": mid["max_millis"],
+            "hub_max_ms": hub["max_millis"], "hub_reach_nodes": hub["reach6_nodes"],
+            "nodes": data["graph"]["nodes"], "both_degree": data["graph"]["both_degree"],
+        }
+    return {
+        "reach_rows": list(_LATENCY_FALLBACK_REACH),
+        "enum_ms": _LATENCY_FALLBACK_ENUM_MS,
+        "reach_min": 6.33, "reach_max": 9.88,
+        "hub_max_ms": 6505.73, "hub_reach_nodes": 12710,
+        "nodes": 34000, "both_degree": 2.9,
+    }
+
 
 # Figure A: clearest low-vs-high contrast among uncapped instances.
 _PAIR_LOW = "django__django-11133"
@@ -792,14 +833,17 @@ def render_direction(bars, out_path: Path, n: int) -> Path:
 # --- FIGURE: latency.png — why HydraDB --------------------------------------
 
 def render_latency(reach_rows, enum_ms: float, out_path: Path,
-                   enum_label: str = "algo.MSpaths path enumeration") -> Path:
+                   enum_label: str = "algo.MSpaths path enumeration",
+                   note: str | None = None) -> Path:
     """Bounded in-engine reachability vs path enumeration, on a log scale.
 
     ``reach_rows`` is ``[(k, ms), ...]`` — the measured ``count(*)`` reachability
-    latency at k=1..6 (exact, matched against networkx). ``enum_ms`` is the
-    ``algo.MSpaths`` timeout (30,000 ms) on the same out-degree-3 density. The log
-    y-axis makes the ~2,500x gap legible: 12 ms at k=6 against a 30 s wall. This
-    is the "why HydraDB" image. Empty input renders an empty axes.
+    latency at k=1..6 on ONE graph. ``enum_ms`` is the measured ``algo.MSpaths``
+    bounded-path enumeration cost on the SAME graph. Both come from
+    ``docs/latency.json`` (see ``scripts/latency_measure.py``); nothing here is
+    hand-entered. The log y-axis makes the gap legible. ``note`` is an optional
+    caption line (used to disclose the busiest-hub operating point). Empty input
+    renders an empty axes.
     """
     import matplotlib
     matplotlib.use("Agg")
@@ -829,16 +873,17 @@ def render_latency(reach_rows, enum_ms: float, out_path: Path,
     if ms:
         speedup = enum_ms / max(ms)
         ax.annotate(
-            f"~{speedup:,.0f}x faster at k={reach_rows[len(ms) - 1][0]}\n"
-            "same out-degree-3 density where enumeration timed out",
+            f"~{speedup:,.0f}x cheaper at k={reach_rows[len(ms) - 1][0]}\n"
+            "same 34k-node django-density graph",
             xy=(len(ms) - 1, ms[-1]), xytext=(len(ms) - 2.4, enum_ms * 0.25),
             fontsize=9, color="#374151",
             arrowprops=dict(arrowstyle="->", color="#374151", lw=1.0))
 
-    ax.set_title(
-        "Bounded reachability `count(*)` vs path enumeration\n"
-        "measured, exact (== networkx) at every k — latency flat where "
-        "enumeration hit the 30 s timeout", fontsize=12.5)
+    title = ("Bounded reachability `count(*)` vs path enumeration\n"
+             "one 34k-node django-density graph, both queries measured cold")
+    if note:
+        title += "\n" + note
+    ax.set_title(title, fontsize=12.0)
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
@@ -1228,10 +1273,13 @@ _DEMO_TEMPLATE = """<!doctype html>
 
 <div id="cy"></div>
 
-<footer>Bounded fix→test reachability answers in 3–12&nbsp;ms via in-engine
-  <code>count(*)</code> over <code>[:CALLS*1..k]</code> where path enumeration
-  timed out at 30,000&nbsp;ms on the same density. Graph data embedded inline;
-  Cytoscape.js vendored locally — this page needs no network.</footer>
+<footer>Bounded fix→test reachability via in-engine <code>count(*)</code> over
+  <code>[:CALLS*1..k]</code> always returns; on one 34k-node django-density graph
+  it answers in 6–10&nbsp;ms (typical source) to 6.5&nbsp;s (busiest hub) while
+  path enumeration on that same graph runs to tens of seconds — up to the
+  30,000&nbsp;ms ceiling (see docs/latency.md). Graph data embedded inline;
+  Cytoscape.js vendored
+  locally — this page needs no network.</footer>
 
 <!-- vendored: docs/vendor/cytoscape.min.js — Cytoscape.js 3.30.2 (MIT), inlined for offline use -->
 <script>{cyto_src}</script>
@@ -1361,9 +1409,19 @@ def generate_direction_figure(out_path: Path = _PLOTS / "direction.png") -> Path
 
 
 def generate_latency_figure(out_path: Path = _PLOTS / "latency.png") -> Path:
-    """docs/plots/latency.png — measured reachability latency vs the 30 s timeout."""
-    reach_rows = [(1, 4), (2, 2), (3, 4), (4, 3), (5, 7), (6, 12)]
-    return render_latency(reach_rows, 30000, out_path)
+    """docs/plots/latency.png — measured on ONE 34k-node django-density graph.
+
+    Reads the committed docs/latency.json (produced by scripts/latency_measure.py);
+    the per-k reachability curve is no longer hardcoded. The bar for enumeration is
+    the measured algo.MSpaths cost between connected mid-graph seeds on the SAME
+    graph; the caption discloses the busiest-hub operating point, where count(*)
+    still completes and enumeration grazes / hits the 30 s ceiling.
+    """
+    lat = load_latency()
+    note = (f"busiest-hub source: count(*) still completes "
+            f"({lat['hub_max_ms']:,.0f} ms, {lat['hub_reach_nodes']:,} nodes) "
+            f"where enumeration grazes the 30 s ceiling")
+    return render_latency(lat["reach_rows"], lat["enum_ms"], out_path, note=note)
 
 
 def generate_offenders_figure(out_path: Path = _PLOTS / "offenders.png") -> Path:
