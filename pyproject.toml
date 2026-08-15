@@ -15,6 +15,10 @@ dependencies = [
     "scipy>=1.14",
     "matplotlib>=3.9",
     "rich>=13.7",
+    "protobuf>=5.27",
+    "grpcio-tools>=1.64",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.52.3",
 ]
 
 [project.optional-dependencies]

@@ -1,279 +1,201 @@
 # Substrate Friction
 
-**A graph-native gate that asks whether the call-graph structure between a bug's fix sites and its tests predicts whether an AI coding agent will fail on the ticket — and finds, on the real engine substrate, that it does not.**
+**Every AI coding agent that reads your repository builds a graph of it first — and Aider's repo map, RepoGraph, and LocAgent all build that graph by matching identifier _names_. We built both arms of the same django commit — one name-matched, one type-resolved — and measured what name matching costs: a precision ceiling of `0.746`, recall `0.352` of the true graph, Jaccard `0.3143`. A quarter of a name-matched graph's in-scope edges do not survive contact with type resolution, and they fail in a structured, nameable way.**
 
-Every other tool in this space is trying to make coding agents *succeed* — better retrieval, better context, better prompts. This asks the inverted and much cheaper question: which tickets should we not give them at all? The honest answer this project measured is reported first, below, whichever way it went — and it went against the thesis.
+![Pruning wrong edges on django-11490](docs/plots/prune.png)
 
----
+_Above: the fix-site neighbourhood of `get_combinator_sql()` in `django__django-11490`. The name-matched arm draws **21** edges; type resolution confirms **12** and leaves **9** unconfirmed (red). **Four of those nine** red edges are one collision — `list.extend` name-bound to a GIS class. This is the whole thesis in one picture, and it is the `docs/demo.html` money shot._
 
-## The result — lead with the null
-
-We asked whether the graph structure between a bug's fix sites and its tests predicts whether an AI coding agent will fail on it. **It does not.**
-
-> **AUC 0.565, r = 0.055, p = 0.726**, across **43** SWE-bench Verified django instances and **three** published agent systems, with **three** confound checks. A clean null.
-
-Two independent routes reach the same null on the same substrate:
-
-| Measurement | Instances | AUC | r | p |
-|---|---:|---:|---:|---:|
-| **Reference-derived, full path enumeration (headline)** | 43 endpoint-bearing | **0.565** | 0.055 | 0.726 |
-| Reference-derived, restricted to engine-answered | 23 | 0.576 | 0.119 | 0.587 |
-| Prior independent baseline over full-repo graphs | — | ~0.567 | 0.047 | 0.77 |
-
-The engine run confirms the reference run: two independent routes, the same null. Nothing was tuned, dropped, or reframed to move a number in either direction. **Verdict: NO-GO.**
-
-## The methodological finding — the most interesting thing this produced
-
-Along the way the engine handed us a confident-looking positive:
-
-> **Engine-computed AUC 0.780** (r = 0.428, p = 0.0416). Taken alone it looks like a strong result. **It is an artifact of the engine's `pathCount = 20` truncation.**
-
-At `pathCount = 20` the engine sees **2.6 %** of the paths that exist between those node sets — it returned **1021** paths where full enumeration over the **identical** edge set finds **38 720** (fidelity recall **0.0264**, validity precision **1.0**: every path it returns is real, it just sees 1/38th of them). The friction metric is defined over path *multiplicity*, so scoring it off that 2.6 % sample **manufactured a correlation that vanishes the moment the truncation is removed** — the same 23 instances, same edges, same `maxLen`, re-scored from full enumeration, collapse to AUC 0.576 (p = 0.587).
-
-That is a general warning for anyone scoring a graph metric off capped path queries: **truncated path sampling can manufacture a confident-looking correlation where none exists.**
+This is a measurement of the **substrate** every localization and retrieval tool in this space stands on. It holds regardless of what you build on top. Everything else here — a directional connectivity finding, a graph engine used the way graphs want to be used, and an honestly-null failure predictor — is the scaffolding that produced the measurement and the results it produced along the way, reported without dressing up.
 
 ---
 
-## What this is — the gate, running
+## What this is
 
-`friction check` scores one instance against the live engine and prints the six-component breakdown, the score, the Cypher it ran, the measured latency, and — because the finding is a null — a caveat that the score should not be trusted. Two real runs against `bolt://127.0.0.1:7687` (engine commit `02a40025`):
+Take one SWE-bench django ticket. To reason about it structurally you first need a call graph, and _how you build that graph_ is a choice with consequences nobody in this space has measured against a type-resolved reference on real code. We build the same repository two ways and compare them edge-for-edge:
 
-```
-  django__django-11885
-  subgraph: 4835 nodes / 8105 edges   (queried at maxLen 6)
+- **Arm A — name-matched.** A call `x.foo()` becomes an edge to _every_ function named `foo`. This is how Aider's repo map, RepoGraph (arXiv 2410.14684), and LocAgent (arXiv 2503.09089) build their graphs.
+- **Arm B — type-resolved.** The same repository indexed with `scip-python` (pyright-backed), so `x.foo()` resolves to `foo` on the _actual static type_ of `x`, or to nothing when the receiver's type is unknown.
 
-  Fix sites:     10 function(s)
-  Test targets:  1 function(s)
-  ────────────────────────────────────────────────────
-  Path multiplicity    F1   1.00  ████████████
-  Mean path length     F2   0.86  ██████████··
-  Intermediate spread  F3   0.67  ████████····
-  Convergence          F4   0.08  █···········
-  Cyclic pressure      F5   0.00  ············
-  Fan-in load          F6   0.02  ············
-  ────────────────────────────────────────────────────
-  FRICTION SCORE             0.58   band: MEDIUM
-  Illustrative failure prob: 58%
-  Recommendation (illustrative): agent with human review of the patch
+Same repo, same commit, same extraction of definitions. Only edge resolution differs. Both arms are resident in one HydraDB engine at once, in disjoint id bands, so the comparison is a single-engine operation.
 
-  Engine returned 200 path(s).
-  ⚠ TRUNCATED at the pathCount cap: the engine returned 200 paths,
-    at or above its pathCount cap, so this score is computed off a
-    truncated sample. Cohort fidelity recall is 0.0264 (2.6%) —
-    full enumeration finds far more. Do not trust this score.
-
-  Cypher (algo.MSpaths, one server-side round trip):
-    CALL algo.MSpaths({sourceLabel: 'Function', sourceProperty: 'sid',
-    sourceValues: ['4430000650', '4430006119', … , '4430006128'],
-    targetLabel: 'Function', targetProperty: 'sid',
-    targetValues: ['4430016687'], relTypes: ['CALLS', 'HAS_METHOD', 'INHERITS'],
-    relDirection: 'both', maxLen: 6, pairwise: true, pathCount: 20})
-    YIELD path, pathCost RETURN path, pathCost
-  Measured latency: 11751.65 ms  (cohort median 14,614 ms, p95 29,041 ms at maxLen 6).
-  ────────────────────────────────────────────────────
-  CAVEAT — READ BEFORE TRUSTING THE SCORE ABOVE
-  On the real engine substrate this metric does NOT predict agent
-  failure: AUC 0.565, r=0.055, p=0.726 (a clean null).
-  The confident-looking engine signal (AUC 0.780) is a
-  demonstrated artifact of the engine's pathCount cap — full path
-  enumeration over the identical edges finds ~38x more paths
-  (fidelity recall 0.0264). The score is illustrative, not a
-  validated failure probability. See: friction eval / friction fidelity.
-```
-
-The gate is a working graph query whose own output the project shows should not be trusted at `pathCount = 20`. Saying that plainly, on screen, is the point: a gate that printed a recommendation without the caveat would launder the null into false confidence.
-
-`friction list` shows every instance and its engine answerability; `friction eval` and `friction fidelity` print the recorded verdict and the truncation evidence verbatim from `docs/`.
-
----
-
-## The thesis
-
-Take one SWE-bench ticket. It has a set of **fix sites** (functions the gold patch edits) and a set of **test targets** (functions the failing tests exercise). Build the repository's function-level call graph and look at the **set of bounded paths** between those two node sets. The bet: when fix and test are separated by many long, convergent, cyclic paths through many intermediate functions — high *friction* — an autonomous agent is more likely to fail, because it has to reason across more of the call graph to connect the change to the behaviour under test.
-
-This is a bet, and the go/no-go result is reported above whichever way it went. It went NO-GO. The graph structure between fix and test does not predict agent failure on this cohort. That is the finding, and it is a useful one: it says a plausible, cheap, structure-only signal is not there, and it shows *how* a truncated graph query can fake it being there.
-
----
-
-## Setup
+### Quickstart
 
 ```bash
 git clone <repo> && cd substrate-friction
-./setup.sh            # brings up the engine, installs the package, loads the
-                      # shipped pre-built subgraphs, warms a real `friction check`
+./setup.sh                                   # engine up, package installed, shipped
+                                             # working set loaded, live gate warmed
+friction check   --issue django__django-10554   # THE GATE: real count(*) Cypher + latency
+friction compare --issue django__django-10973   # arm A (name-matched) vs arm B (type-resolved)
 ```
 
-`setup.sh` is one command from a clean clone; `just` is **not** required. The engine container is configured (in `docker-compose.yml`) with the large Rust stack the traversal needs:
+`setup.sh` runs from a clean clone with no manual steps (cold: about 77 s to a working gate — honest, not sub-60s). `friction compare`, `precision`, `connectivity`, `eval`, and `list` are cache-backed and read the committed `docs/` reports and `data/…/arms/` caches; they need no live engine. Only `friction check` and `friction serve` touch the running engine.
 
-```
-export RUST_MIN_STACK=33554432
-```
-
-Convenience recipes (`justfile`):
-
-| Recipe | Does |
-|---|---|
-| `just up` / `just down` | start / tear down the engine (+ MinIO) via docker compose |
-| `just install` | `uv sync --extra dev` |
-| `just test` | run the suite (`pytest -m "not engine"`) — **213 pass** |
-| `just test-engine` | the 8 engine-marked tests (need a live node) |
-| `just probe` | re-measure the engine's capability table |
-
-**Pinned HydraDB engine commit:** `02a40025d2d57e97ab2754c8256219cdbfeab379` (v0.1.1, AGPL-3.0). Every number in this README was measured against that build; `docs/pinned-engine-commit.txt` carries the hash.
+**CLI:** `friction check / compare / precision / connectivity / eval / list / serve`.
+**API:** `GET /health /instances /check/{id} /compare/{id} /precision /connectivity`.
 
 ---
 
-## How HydraDB is used
+## Finding 1 — the substrate: what name matching costs
 
-This is the criterion-#2 section: which graph-native primitives, where, what breaks without them, and why a vector index structurally cannot do the job.
+On django (commit `b9cf764`), arm A produced 18,774 call edges. Restricting to edges whose source is in scope and mappable onto the shared identity space leaves **5,873** arm-A edges to compare against arm B's internal edges:
 
-### (a) Which primitives, where
+| Measure | Value |
+|---|---:|
+| Compared (in scope) | **5,873** |
+| Confirmed by arm B (both) | **4,381** |
+| In arm A only, unconfirmed | **1,492** |
+| True edges arm A missed (only in arm B) | **8,064** |
+| **Arm A precision (ceiling)** | **0.746** |
+| Arm A recall of the true graph | **0.352** |
+| Jaccard | **0.3143** |
 
-**`algo.MSpaths` with `pairwise: true` — the metric-defining query.** It computes every bounded path from the fix-site set to the test-target set in **one server-side round trip**. `sourceValues`/`targetValues` are lists of **strings** matched against a string `sid` property and **inlined as Cypher literals** (the pinned build rejects a Bolt `$parameter` there with "composite parameter is only supported as an UNWIND input"). The capability probe confirmed `pairwise` **is** available on this build (`docs/engine-capabilities.md`: `"pairwise_supported": true`), so it is used; without it the same call still returns bounded paths between the two sets and only F1's normalisation changes.
+The unconfirmed edges are not random. They cluster on container-method names that collide across the codebase:
+
+![Where the unconfirmed edges point](docs/plots/offenders.png)
+
+| Target | Unconfirmed | What it actually is |
+|---|---:|---|
+| `extend` | **139** | `list.extend` name-bound to a GIS class |
+| `lower` | **125** | `str.lower` bound to `django.template.defaultfilters.lower` |
+| `cursor` | **54** | the counter-example — see below |
+| `import_module` | **33** | |
+| `search` | **31** | |
+
+A name matcher cannot tell `list.extend` from a GIS method called `extend`; it draws an edge to both. (In v1's tree-sitter graph the same failure wired Python's builtin `super()` to `django/template/loader_tags.py::BlockNode.super` **1,321 times** — see the retraction below.)
+
+### `0.746` is a ceiling — read it in both directions
+
+pyright emits **no** occurrence when a receiver's type is unknown; it never invents an edge. So an arm-A edge missing from arm B is _either_ a genuine false positive _or_ a real call pyright declined to resolve. The direction of arm B's bias is fixed: it under-reports. Therefore **true precision is `>= 0.746`, never `<=`.** State it that way every time the number appears.
+
+The `cursor` block of **54** unconfirmed edges is the clean counter-example: real `self.connection.cursor()` calls on an untyped receiver, where pyright emits nothing and arm B under-reports. **Here arm A was right and the type-resolved graph is the incomplete one.** We report the ceiling as a ceiling precisely so this case is not hidden.
+
+### What the wrong edges cost — a projection, not a measurement
+
+Projected localization cost of a name-matched graph of this quality: **1.2pp to 2.0pp** of resolve rate (interval `[0.0119, 0.0197]` as a fraction of instances). This is **an analogy to ARISE's published ablation band, not a resolve-rate delta we measured** — we did not run SWE-bench.
+
+- **Basis.** ARISE (arXiv 2605.03117) improved call-graph edge quality on SWE-bench Lite and moved end-to-end resolve **17.3% → 22.0%** and Function Recall@1 **0.43 → 0.60**. We map our measured edge quality onto that band by analogy, the way ARISE's own band is stated as an interval.
+- **Corroborating, cited not reproduced.** SHERLOC (arXiv 2606.24820): +5.95pp mean and _negative_ transfer from bad localization. RGFL (arXiv 2601.18044): wrong-element localization implicated in **53%** of unresolved instances.
+
+_Source: `docs/precision.md`, `docs/graph-delta.md`. Reproduce: `uv run python scripts/graph_delta.py --repo data/repos/django --out docs/graph-delta.md`._
+
+---
+
+## Finding 2 — direction: the relation every prior version measured backwards
+
+Nobody has published this. Measured over 44 django instances that carry both a fix-site set and a test-target set, bounded at 6 hops:
+
+![The direction finding](docs/plots/direction.png)
+
+| Direction | Connected | What it means |
+|---|---:|---|
+| **fix → test** (directed) | **0/44 (0%)** | Code does not call tests. The direction every prior spec used was backwards. |
+| **test → fix** (directed) | **24/44 (55%)** | The clean semantic: tests call the code they exercise. |
+| **undirected** | **43/44 (98%)** | "Shares a neighbourhood" — _not_ "the test exercises this code." |
+
+Two consequences. First, `fix → test` is `0/44` because production code has no edge to the test that guards it; the natural directed relation is `test → fix` at **55%**. Second, the jump from `55%` to `98%` is the pytest fixture / `setUp` / `parametrize` / framework-dispatch closure: a test reaches its code through dispatch that a static call graph structurally cannot record. Dropping direction recovers those instances, but it recovers them by measuring a weaker, symmetric relation.
+
+**Every v1/v2 friction number used `relDirection: 'both'`** and therefore measured the weaker "shares a neighbourhood" property, never directed `test → fix` coverage. Report the two measures separately; never present the undirected number as evidence a test covers a fix.
+
+_Source: `docs/connectivity.md`._
+
+---
+
+## Finding 3 — the engine: bounded reachability stays cheap and always returns where path enumeration hits the 30 s wall
+
+The metric v2 asked for — the number of bounded paths between two node sets — is **#P-complete** (Valiant 1979). It is not slow; it is intractable, and on a dense django graph the engine's `algo.MSpaths` enumeration hit the hard **30,000 ms** timeout.
+
+The fix is to ask a different, tractable question with the same intuition: **bounded reachable-set size**, computed in-engine as a masked-BFS `count(*)`.
 
 ```cypher
-CALL algo.MSpaths({
-  sourceLabel: 'Function', sourceProperty: 'sid', sourceValues: ['…fix sids…'],
-  targetLabel: 'Function', targetProperty: 'sid', targetValues: ['…test sids…'],
-  relTypes: ['CALLS', 'HAS_METHOD', 'INHERITS'],
-  relDirection: 'both', maxLen: 6, pairwise: true, pathCount: 20
-}) YIELD path, pathCost RETURN path, pathCost
+MATCH (s {id: 41000000000})-[:CALLS*1..6]->(n) RETURN count(*) AS n
 ```
 
-Measured cost of this query on real django code graphs (answered instances, n = 23): **median 14 614.5 ms, p95 29 041.27 ms, max 29 948.75 ms** at `maxLen 6` — it sits right on the engine's 29 999 ms ceiling.
+Against a walk-correct networkx reference this is **exact at every k** — a standing `@pytest.mark.engine` test on a 1,000-node out-degree-3 graph. Its cost is bounded by the visited **set** (≤ graph size), not by walk volume, so it always returns. Measured honestly on **one 34,000-node graph at django density** (both-degree ≈ 2.9), `count(*)` answers in **6–10 ms** from a typical source and up to **6.5 s** from the busiest hub (which reaches 12,710 nodes), while `algo.MSpaths` path enumeration on that **same graph** costs **~15 s** from mid-graph seeds and **~24 s** from a hub — grazing the **30 s** ceiling, and timing out on it in other cold runs. The honest ratio is **~1,500–2,300× at the typical operating point, and unbounded — enumeration times out — at the busiest source** (`docs/latency.md`). The two graphs are kept distinct: at 1,000 nodes enumeration finishes in ~200 ms and does not time out; the 30,000 ms timeout is the ~34,000-node django graph. The earlier single "~2,500×" came from comparing those two different graphs and is retracted.
 
-**`algo.SSpaths` with an integer `sourceNode`, `relDirection: 'incoming'`, `maxLen: 1` — fan-in (F6).** `SSpaths` does not accept the `MSpaths` origin spelling: it demands one **integer** `sourceNode` (a string is rejected with "sourceNode must be an integer node id"), and it needs an explicit `pathCount` or it returns only the single shortest path. Fan-in over a set of fix sites therefore issues one such query per site and unions the direct callers client-side. This query is **sub-second and never failed**.
+![Reachability latency vs the enumeration wall](docs/plots/latency.png)
 
-**`UNWIND $rows` batched loading over Bolt — ingest.** `MERGE (n {id: row.id}) SET n:Label, …` for nodes and `CREATE (a {id: row.src})-[:REL]->(b {id: row.dst})` for edges, one hop per batch (the probe established these are the only forms this build accepts). Measured at **22 249.5 edges/sec at batch size 500** (`docs/throughput.md`).
+The exactness claim is a standing `@pytest.mark.engine` regression test: it seeds a fresh 1,000-node out-degree-3 graph, rebuilds it in networkx, and asserts the engine's `count(*)` equals the reachable-set size at every `k = 1..6` — zero mismatches. When the gate runs `friction check` it issues that same query live and **prints its own measured latency — run `friction check` to see yours** on your store.
 
-**Honesty in the same breath:** at `maxLen 6` the engine answered only **23 of 43** endpoint-bearing instances. **16 hit the 29 999 ms server timeout** and **4 exhausted the memory pool** (`Neo.TransientError.General.MemoryPoolOutOfMemory`) on the dense 6-hop traversal. The unanswered 20 are recorded as ENGINE-UNANSWERED and are never back-filled from any reference.
+**A syntax finding that matters:** `RETURN count(n)` where `n` is a node is **rejected** by this build the moment a traversal precedes it (`"property values support integer, float, boolean, and string literals"`). The working form is `RETURN count(*)`; `count(n.id)` also works. The keystone query only parses in the `count(*)` form.
 
-### (b) What breaks without it
+### How HydraDB is used
 
-Without a server-side multi-source/multi-target path primitive, friction for one ticket is **N × M client round trips** — one query per (fix-site, test-target) pair. A modest 3-fix × 7-test ticket becomes 21 separate round trips; at this build's per-call latency the gate stops being something you can sit in a workflow. `MSpaths` with `pairwise: true` collapses all N × M pairs into a single round trip that the engine plans and executes once.
+**Both arms resident at once, in disjoint id bands.** Arm A and arm B of the same commit live in one `default` graph in non-overlapping integer-`id` bands, so "diff the name-matched graph against the type-resolved graph" is a single-engine operation, not a cross-database join. Every edge count in Finding 1 depends on this.
 
-### (c) Why a vector index structurally cannot do this
+**Bounded reachability, in-engine.** `MATCH (s {id:N})-[:CALLS*1..k]->(n) RETURN count(*)` lowers to a masked GraphBLAS BFS whose cost is `O(m)` per hop, bounded by the _visited set_, not by walk volume. The frontier is finite; the path set is not. That is why the cost is bounded by the reachable-set size and always returns — flat in `k` for a typical source, and still only a few seconds from the busiest hub (`docs/latency.md`) — where enumeration is exponential in `k`. The variable-length pattern carries a mandatory upper bound, is single-typed, and matches on integer `id`.
 
-Friction is defined over the **set of paths between two node sets**. Paths do not exist in a vector space. Two functions with near-identical text sit adjacent in embedding space while lying on completely disconnected execution paths — the embedding is blind to precisely the property being measured. No amount of nearest-neighbour retrieval recovers "how many bounded call-graph paths connect these two functions, how long, how convergent, how cyclic." That is a graph traversal, and it is why the substrate is a graph engine rather than a vector store — even though, as the evaluation shows, the signal itself turned out not to be predictive.
+**Why a vector index structurally cannot do this.** The relations here — a bounded reachable set, a directed `test → fix` connection, the confirmed-vs-unconfirmed edge split — are defined over **reachable sets and cuts in a specific edge set.** Paths and cuts do not exist in an embedding space. Two functions with near-identical text sit adjacent in vector space while lying on completely disconnected call paths; nearest-neighbour retrieval is blind to precisely the property being measured. No embedding recovers "how many bounded call-graph paths connect these two nodes, and in which direction" — that is a graph traversal over resolved edges, which is why the substrate is a graph engine.
 
----
-
-## The metric
-
-Six components, computed from the returned path set, then min-max normalised across the instance set (the engine has no `min`/`max` aggregate, so normalisation happens client-side):
-
-| # | Component | Definition |
-|---|---|---|
-| F1 | Path multiplicity | paths returned ÷ (fix sites × test targets) |
-| F2 | Mean path length | mean edge count over the returned paths |
-| F3 | Intermediate spread | count of distinct intermediate functions across all paths |
-| F4 | Convergence | distinct intermediates ÷ total intermediates (inverted in the score: convergence drives friction up) |
-| F5 | Cyclic pressure | fraction of returned paths that revisit a node |
-| F6 | Fan-in load | direct-caller count of the fix sites (`SSpaths` fan-in) |
-
-Per-component AUC over the engine-answered instances (`docs/evaluation.md`):
-
-| Component | AUC |
-|---|---:|
-| F1 | 0.606 |
-| F2 | 0.788 |
-| F3 | 0.799 |
-| F4 | 0.553 |
-| F5 | 0.500 |
-| F6 | 0.591 |
-
-Best single component is **F3 (0.799)** — but these per-component AUCs inherit the **same `pathCount`-truncation artifact** as the composite and are not evidence on their own. A logistic model fitted on a 70 % train split scores train AUC 0.898 but **held-out AUC 0.542**: with n = 23 the fitted model does not generalise beyond chance, independent of the truncation issue.
+_Source: `docs/latency.md` (both queries measured on one django-scale graph; reproduce with `uv run python -m scripts.latency_measure`), `src/friction/reach.py`, `tests/test_reach.py` (`@pytest.mark.engine`), `docs/engine-scaling.md`. Pinned engine commit `02a40025d2d57e97ab2754c8256219cdbfeab379` (v0.1.1, AGPL-3.0), recorded in `docs/pinned-engine-commit.txt`._
 
 ---
 
-## Evaluation
+## The honest secondary result — the friction predictor is a scoped NO-GO
 
-**Ground truth.** SWE-bench Verified, 231 django instances, 50 built into per-instance subgraphs. Pass/fail labels come from three published systems in `SWE-bench/experiments`: `20241029_OpenHands-CodeAct-2.1-sonnet-20241022` (**primary**), `20240620_sweagent_claude3.5sonnet`, and `20240402_sweagent_gpt4`.
+We also asked whether directional structure features predict per-instance agent failure. **They do not.** Ground truth: `20241029_OpenHands-CodeAct-2.1-sonnet-20241022`, `n = 44`, class balance **21 failed / 23 resolved**. `failed=True` is the positive class.
 
-**The null (headline).** Reference-derived, full path enumeration with no truncation, all 43 endpoint-bearing instances: **AUC 0.565, r = 0.055, p = 0.726**. Restricted to the 23 engine-answered instances the reference gives AUC 0.576 (p = 0.587). The prior full-repo baseline was ~0.567 — the same null on a different route.
+| Our features | AUC | | Non-graph baselines | AUC |
+|---|---:|---|---|---:|
+| `test_to_fix_hops` (directed) | **0.518** | | `f2p_count` | **0.653** |
+| `fanin` | 0.509 | | `patch_lines` | 0.613 |
+| `undirected_hops` | 0.508 | | `statement_chars` | 0.590 |
+| `bwd_growth` | 0.500 | | `patch_files` | 0.573 |
+| `overlap_ratio` | 0.500 | | `patch_hunks` | 0.533 |
+| `fwd_growth` | 0.436 | | `statement_has_traceback` | 0.528 |
 
-**The truncation artifact.** Engine-computed AUC is 0.780 (p = 0.0416) but is a demonstrated `pathCount = 20` artifact — see the fidelity numbers below. Removing only the truncation, on the same 23 instances and same edges, collapses it to 0.576 (p = 0.587).
+**The best feature (`test_to_fix_hops`, 0.518) does not beat the best baseline (`f2p_count`, 0.653), or even `patch_lines` (0.613).** And the sample cannot resolve the difference: every percentile-bootstrap 95% CI on `AUC(feature) − AUC(patch_lines)` brackets zero — e.g. `test_to_fix_hops` at `−0.095 [−0.299, +0.113]`. **Verdict: scoped NO-GO. `n=44` cannot resolve small effects.** The project leads with the substrate finding, not this predictor.
 
-**Fidelity — the guard firing.**
-- *pathCount truncation (same subgraph, same question):* over 22 answered instances with a fully-enumerable reference (1 excluded — its reference enumeration hit its own cap), the engine returned **1021** paths where the reference found **38 720**. Overlap recall **0.0264**, validity precision **1.0**. Largest shortfall: `django__django-11740`. Recall this far below 0.9 is the guard: a path-multiplicity metric scored off 2.6 % of the paths is scoring truncation noise.
-- *budget truncation (subgraph vs full graph):* of **36** instances whose fix and test connect within 6 hops in the full repo graph, the engine returned a path for **16** (cohort connectivity recall **0.4444**); restricted to answered instances it is **16/16 = 1.0**. When the query finishes, the budgeted subgraph did preserve the short connections; the cost lands as the ~half of instances the engine cannot answer at all.
+### Two retractions
 
-**Three confound checks** (`docs/evaluation.md`):
+- **v1 is WITHDRAWN.** v1 reported AUC **0.565** / p=**0.726**. It was measured on a graph where **73.9%** of the resolved `CALLS` edges were name-collision artifacts (`super()` → `BlockNode.super` **1,321** times, `.lower()` → a template filter, `.extend()` → a GIS class). It measured the artifacts, not the thesis.
+- **v2 is WITHDRAWN as a test of the thesis.** v2 reported **0.631**, but that was f1 / path-multiplicity _only_ (the cache stored path counts, not node lists), and it **lost to `patch_lines` at 0.637.** A structure signal that loses to patch size is not evidence for the structure thesis.
 
-| Check | Value | Reading |
-|---|---:|---|
-| friction vs repo LOC (Pearson) | −0.113 | friction is **not** a repo-size proxy |
-| friction vs patch lines (Pearson) | 0.379 | mild link to patch size |
-| repo LOC → failure (AUC) | 0.568 | repo size alone predicts about as weakly as friction |
-| patch lines → failure (AUC) | **0.640** | **patch size predicts failure better than friction does** |
+_Source: `docs/evaluation.md`, `docs/evaluation-v1-retracted.md`. Reproduce: `uv run python -m friction.harness`._
 
-**Sensitivity / excluded instances.** 20 engine-unanswered (timeout/OOM) are not scored and not substituted — the answered set is a sample selected for cheap traversability, and the engine's 0.780 must be read in that light. 7 empty-endpoint instances (an endpoint set is empty → zero friction by construction; 4 failed, 3 resolved) are excluded from the scored set; adding them back at minimum friction moves the engine number from 0.780 (n = 23) to 0.631 (n = 30). **Neither survives the fidelity check.** Across systems the engine number is stable (0.780 / 0.836 / 0.770) — which shows the *artifact* is stable, not that the metric is.
+---
 
-Plots: `docs/plots/correlation.png` (friction vs outcome) is regenerated by `uv run python -m friction.harness`; `docs/plots/pair.png` (the demo pair) and `docs/plots/truncation.png` (engine vs full enumeration) are regenerated by `uv run python -m friction.viz` (`friction.viz.generate_demo_figures`). Every figure is generated from the caches by code; none is hand-entered.
+## What we do not claim
+
+**We do not claim to predict per-instance agent failure. That problem is already solved.** Agent Psychometrics (arXiv 2604.00594) reports AUC **0.841** on SWE-bench Verified, **0.787 from the problem-statement text alone**, with a task-agnostic prior already at **0.718**. Our structure-only features are not competitive and are not meant to be — these rows are **published, not reproduced by us.** GRADE (arXiv 2606.22741) predicts failure from the _agent's run graph_ — adjacent to us, and it de-risks the mechanism while leaving the static repository call graph unclaimed. The contribution here is the **substrate measurement**, which nobody in this space had made against a type-resolved reference on real code.
+
+**Label contamination caps any AUC on this benchmark.** SWE-Bench+ (arXiv 2410.06992) measured **32.7%** solution leakage and **31%** weak tests; OpenAI reports **59.4%** of o3's failures on Verified were test flaws, not wrong patches. A ceiling below 1.0 is structural.
 
 ---
 
 ## Limitations
 
-- **Static call resolution resolves 22.27 % of call sites on django** (188 312 sites, 41 929 resolved). Audited in `docs/call-resolution-audit.md`: this is explainable, not a defect. **34.3 %** of all call sites are duck-typed dispatch on statically-unknown receivers (`x.m()` — unresolvable without type inference), **11.7 %** are builtins/stdlib/third-party correctly out of scope, **8.7 %** are module-level calls with no enclosing function to be a caller node, and **11.1 %** are class instantiations the function→function model deliberately omits. Genuinely reachable misses are only ~**0.65 %**; fixing all three known resolver gaps raises the rate only to ~23 %. Missing `CALLS` edges from dynamic dispatch are therefore inherent to AST-based Python call-graph extraction, and the graph is sparse *by the nature of static Python*, not by a bug.
-- **`COVERS` (test → target) over-approximates real coverage**: a static test-to-function association is broader than the functions a test actually exercises at runtime.
-- **Python only**, single project (django). The engine's serialized write path means adding writers does not help, which is part of why a small-graph project was chosen.
-- **Subgraph truncation.** The per-instance subgraphs are budget-limited BFS balls: **0 of 50 complete all 6 hops** (17 reach 3 hops, 32 reach 4, 1 reaches 5; median 8 672 nodes / 14 283 edges). Every engine query traverses a partial neighbourhood — a second truncation stacked on top of `pathCount`.
-- **The `maxLen 6` bound.** Every path query carries a mandatory `maxLen`; 6 is the signal-bearing depth for the metric, and cost grows ≈ (both-degree)^maxLen, so 6 is where django-scale graphs sit on the 30 s ceiling. Lowering it to make a query answerable would truncate exactly the long fix→test paths the metric exists to measure, so unanswered instances are recorded as "no engine path" rather than forced under budget.
-- **Path fidelity.** As above, engine recall vs full enumeration is **0.0264** at `pathCount 20` — the single most important limitation, and the reason the engine's own headline number is not trusted.
+- **Precision is a ceiling.** Arm B under-reports on untyped receivers (`cursor(54)`), so `0.746` bounds one direction; true precision is `>= 0.746`, never `<=`.
+- **The directional gap is real.** `fix → test` is `0/44`, `test → fix` is `24/44 (55%)`, undirected is `43/44 (98%)` — and the `55% → 98%` gap is fixture / `setUp` / `parametrize` / dispatch edges a static call graph structurally cannot see.
+- **Python only.** The type-resolved arm depends on `scip-python`/pyright.
+- **`maxLen 6`.** Reachability is bounded at 6 hops.
+- **`n = 44`, single repository, underpowered.** A real feature-vs-baseline effect below ~0.15 AUC cannot be resolved on this sample.
+- **Label contamination** (above): a non-trivial fraction of the `failed` labels are wrong.
+- **Arm B under-reports on untyped receivers** — the same property that makes precision a ceiling also means arm B is not ground truth, only a type-resolved reference.
+
+Every latency figure in this README traces to `docs/latency.md` (measured on one django-scale graph); every other number traces to `docs/precision.md`, `docs/graph-delta.md`, `docs/connectivity.md`, `docs/evaluation.md`, `docs/engine-scaling.md`, `src/friction/reach.py`, `tests/test_reach.py`, or `docs/demo.html`. The one exception is the **v1 name-collision counts** (e.g. `super()` → `BlockNode.super` **1,321×**): those are v1 tree-sitter build-log figures, recorded in the retraction string in `src/friction/harness.py`, and are **not** recomputable from committed data — the v1 name-matched caches are gitignored, so they are cited as build-log figures, not as reproducible measurements.
 
 ---
 
-## The object-store defect and the retracted scaling ceiling
+## Upstream contributions
 
-This is a genuine, reproducible engine finding handed back to the sponsor, and it is why the project's numbers were **validated rather than assumed**.
+Two contributions to `github.com/hydra-db/hydradb`, surfaced by this project:
 
-**The defect.** The engine's own documented local configuration (`CLOUD_PROVIDER=local`, straight from its README) uses a SlateDB `LocalFileSystem` backend that does not implement conditional puts. After enough sustained writes to trigger a compaction/manifest update (≈ 6 GB of writes, reached by an earlier full-repo build across the 50 graphs), the write path fails permanently:
-
-```
-object store error: Operation `put_opts` with mode `PutMode::Update`
-not yet implemented by LocalFileSystem(file:///data/graph)
-```
-
-From that point **all writes fail permanently** (a restart just reloads the same broken store) — **but reads and `algo.*` traversals keep working**, while query latency also collapses by orders of magnitude. The node keeps serving, so it *looks* healthy: a monitoring check that only reads reports it alive while it is silently write-dead and far slower. Do not rely on read health as a liveness signal.
-
-**The retraction it forced.** An earlier version of this project measured a "150-node traversal ceiling" against exactly that degraded store and wrongly concluded the engine could not compute the metric at scale. It could — the ceiling was the broken object store, not the engine. `docs/engine-scaling.md` carries the retraction in full. On a **healthy** store the corrected sweep (real friction-query shape, `algo.MSpaths`, `pairwise: true`, cold timings) is:
-
-| nodes | edges | maxLen 6 (both-degree ≈ 3, the django operating point) |
-|------:|------:|---:|
-| 500 | 746 | 191 ms |
-| 2 000 | 2 999 | 782 ms |
-| 8 000 | 11 998 | 797 ms |
-| 16 000 | 23 999 | **1 458 ms** (recommended budget) |
-| 34 000 | 50 998 | 27 620 ms (full django scale, on the 30 s ceiling) |
-
-The binding constraint is walk volume ≈ (both-degree)^maxLen, **not** node count: at both-degree ≤ 2 there is effectively no ceiling to 34 000 nodes (every maxLen-6 cell ≤ 571 ms). Real django's traversed density is both-degree ≈ 2.9. **Mitigation:** keep the working set small, or point the node at an S3-compatible backend (the compose file already runs MinIO for exactly this) which *does* implement conditional puts.
-
----
-
-## Measured throughput
-
-The engineering finding of the ingest path — `UNWIND $rows` batches over Bolt against local object storage (`docs/throughput.md`):
-
-| Batch size | Seconds | Edges/sec |
-|---:|---:|---:|
-| 250 | 0.634 | 15 783.7 |
-| **500** | **0.449** | **22 249.5** |
-| 1 000 | 1.03 | 9 712.1 |
-
-Best is **22 249.5 edges/sec at batch size 500**. Roughly 65 000 edges per repository, so three repositories is under 200 000 edges — minutes to load. The engine's write path is serialized; adding writers does not help, which is why the project deliberately targets a small graph.
+- **Issue #81** — manifest GC fails under the documented `CLOUD_PROVIDER=local`: after enough sustained writes every write fails permanently while reads keep serving, so a read-only health check reports the node healthy while it is silently write-dead.
+- **PR #82** — cypher-compatibility docs covering 7 measured behaviours of the pinned build (inlined-literal set queries, `count(*)` vs rejected `count(n)`, `SSpaths` integer `sourceNode`, and the rest).
 
 ---
 
 ## Attribution
 
-- **[SWE-bench](https://github.com/SWE-bench/SWE-bench)** and **[SWE-bench/experiments](https://github.com/SWE-bench/experiments)** — the Verified split and the published agent trajectories used as ground truth.
-- **[tree-sitter](https://tree-sitter.github.io/tree-sitter/)** — Python parsing for symbol and call extraction.
-- **HydraDB** — the graph engine, pinned at commit `02a40025d2d57e97ab2754c8256219cdbfeab379`, **AGPL-3.0**. The object-store defect and the corrected scaling sweep above are contributed back.
-- **Claude** (Anthropic) — used as a coding assistant while building this project.
-
----
+- **HydraDB** graph engine, pinned at `02a40025d2d57e97ab2754c8256219cdbfeab379` (v0.1.1), **AGPL-3.0** — the graph substrate every measurement runs against.
+- **SWE-bench** and the **SWE-bench/experiments** submissions — ground-truth instances and agent pass/fail labels.
+- **`scip-python`** (pyright-backed) — the type-resolved arm B index.
+- **tree-sitter** — the name-matched arm A parse.
+- **Cytoscape.js** (MIT) — the offline interactive graph in `docs/demo.html` (vendored, no CDN).
+- Cited literature, all published-not-reproduced: Agent Psychometrics (arXiv 2604.00594), GRADE (arXiv 2606.22741), ARISE (arXiv 2605.03117), SHERLOC (arXiv 2606.24820), RGFL (arXiv 2601.18044), RepoGraph (arXiv 2410.14684), LocAgent (arXiv 2503.09089), SWE-Bench+ (arXiv 2410.06992).
+- **Claude** (Anthropic) assisted in building and measuring this project.
 
 ## License
 
-This project's code is **MIT** (`LICENSE`). The HydraDB engine it runs against is **AGPL-3.0** and is credited above; this repository does not vendor or redistribute the engine, it connects to a separately-run node at `bolt://127.0.0.1:7687`.
+This project is **MIT** (see `LICENSE`). The HydraDB engine it queries is **AGPL-3.0** and is used as a pinned external service, not vendored into this source tree; its license governs the engine binary independently of this project's MIT grant.

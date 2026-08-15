@@ -1,0 +1,148 @@
+{
+  "graph": {
+    "nodes": 34000,
+    "edges": 49300,
+    "both_degree": 2.9,
+    "out_degree": 1.45,
+    "band": 45200000000,
+    "seed": 20260816,
+    "generator": "scripts.engine_scaling_sweep.gen_call_graph (Pareto out-degree; hubs + near-leaves)",
+    "note": "one graph at django scale (~34k nodes) and django density (both-degree ~2.9); both queries run on it."
+  },
+  "reach_count_star": {
+    "query_shape": "MATCH (s {id:N})-[:CALLS*1..k]->(n) RETURN count(*)",
+    "direction": "out",
+    "cost_bound": "visited SET (<= graph size)",
+    "hub": {
+      "source_id": 45200001690,
+      "reach6_nodes": 12710,
+      "rows": [
+        {
+          "k": 1,
+          "millis": 30.62,
+          "size": 1265
+        },
+        {
+          "k": 2,
+          "millis": 593.11,
+          "size": 3058
+        },
+        {
+          "k": 3,
+          "millis": 1316.65,
+          "size": 5143
+        },
+        {
+          "k": 4,
+          "millis": 2191.9,
+          "size": 7653
+        },
+        {
+          "k": 5,
+          "millis": 4731.99,
+          "size": 10360
+        },
+        {
+          "k": 6,
+          "millis": 6505.73,
+          "size": 12710
+        }
+      ],
+      "min_millis": 30.62,
+      "max_millis": 6505.73
+    },
+    "mid": {
+      "source_id": 45200001756,
+      "reach6_nodes": 36,
+      "rows": [
+        {
+          "k": 1,
+          "millis": 8.22,
+          "size": 2
+        },
+        {
+          "k": 2,
+          "millis": 6.33,
+          "size": 7
+        },
+        {
+          "k": 3,
+          "millis": 6.38,
+          "size": 10
+        },
+        {
+          "k": 4,
+          "millis": 7.84,
+          "size": 14
+        },
+        {
+          "k": 5,
+          "millis": 6.87,
+          "size": 17
+        },
+        {
+          "k": 6,
+          "millis": 9.88,
+          "size": 36
+        }
+      ],
+      "min_millis": 6.33,
+      "max_millis": 9.88
+    }
+  },
+  "mspaths_enumeration": {
+    "query_shape": "CALL algo.MSpaths({... maxLen: 6, pairwise: true, relDirection: 'both', pathCount: 20 ...})",
+    "max_len": 6,
+    "cost_bound": "path COUNT (unbounded by the graph)",
+    "mid_connected_seeds": {
+      "millis": 14539.21,
+      "answered": true,
+      "rejected_admission_control": false,
+      "timed_out": false,
+      "paths": 0,
+      "source_ids": [
+        45200001756,
+        45200004654,
+        45200002126
+      ],
+      "target_ids": [
+        45200000679,
+        45200001124,
+        45200001521
+      ]
+    },
+    "hub_seed_set": {
+      "millis": 23805.78,
+      "answered": true,
+      "rejected_admission_control": false,
+      "timed_out": false,
+      "paths": 0,
+      "source_ids": [
+        45200001690
+      ],
+      "target_ids": [
+        45200000009
+      ]
+    }
+  },
+  "ratio": {
+    "value": 2.2,
+    "kind": "measured",
+    "definition": "MSpaths(mid connected seeds) millis / slowest count(*) probe on the graph (busiest hub, k=6)",
+    "typical_operating_point": {
+      "range_x": [
+        1471.6,
+        2296.9
+      ],
+      "definition": "MSpaths(mid connected seeds) millis / a typical count(*) probe (mid source, min..max ms)"
+    },
+    "hub_same_source": {
+      "count_star_max_millis": 6505.73,
+      "enumeration": "completed_23805.78ms",
+      "note": "from the SAME busiest-hub source, count(*) completes while enumeration costs 23805.78 ms"
+    }
+  },
+  "timeout_ceiling_millis": 29999,
+  "frontier_cap": 250000,
+  "engine_commit": "02a40025d2d57e97ab2754c8256219cdbfeab379"
+}
