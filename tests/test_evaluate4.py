@@ -183,3 +183,82 @@ def test_report_states_the_sample_cannot_resolve_small_effects(tmp_path):
     write_report(rows, results, path)
     text = path.read_text().lower()
     assert "cannot resolve" in text
+
+
+# --------------------------------------------------------------------------
+# Corpus frame: labels derived from resolved sets, repo carried, arm files
+# resolved by the record's `source` (carried vs built).
+# --------------------------------------------------------------------------
+
+def _fake_multirepo_corpus(tmp_path: Path):
+    carried = tmp_path / "carried"
+    built = tmp_path / "built"
+    resolved = tmp_path / "resolved"
+    resolved.mkdir()
+    manifest = tmp_path / "manifest.jsonl"
+
+    # django (carried) reachable test->fix; sphinx (built) not reachable.
+    _write_instance(carried, "django__django-1", "arm_b",
+                    [(30, 31), (31, 20), (20, 21)])
+    _write_instance(built, "sphinx-doc__sphinx-1", "arm_b",
+                    [(20, 30), (30, 31)])
+    # a usable-but-empty-endpoint record must be dropped.
+    _write_instance(built, "sphinx-doc__sphinx-2", "arm_b", [(1, 2)])
+
+    records = [
+        {"instance_id": "django__django-1", "repo": "django", "source": "carried",
+         "arm_b": {"fix_site_ids": [20], "test_target_ids": [30]}},
+        {"instance_id": "sphinx-doc__sphinx-1", "repo": "sphinx", "source": "built",
+         "arm_b": {"fix_site_ids": [20], "test_target_ids": [30]}},
+        {"instance_id": "sphinx-doc__sphinx-2", "repo": "sphinx", "source": "built",
+         "arm_b": {"fix_site_ids": [], "test_target_ids": [30]}},
+    ]
+    manifest.write_text("\n".join(json.dumps(r) for r in records) + "\n")
+
+    # resolved set: django-1 resolved (=> failed False); sphinx-1 absent
+    # (=> failed True).
+    (resolved / f"{SYSTEM}.json").write_text(
+        json.dumps({"resolved": ["django__django-1"]}))
+    return manifest, carried, built, resolved
+
+
+def test_derive_failed_labels_from_resolved_sets(tmp_path):
+    resolved = tmp_path / "resolved"
+    resolved.mkdir()
+    (resolved / "sysA.json").write_text(json.dumps({"resolved": ["a", "c"]}))
+    labels = evaluate4.derive_failed_labels(["a", "b", "c"], ["sysA"], resolved)
+    assert labels["a"]["sysA"] is False   # resolved -> not failed
+    assert labels["b"]["sysA"] is True    # absent -> failed
+    assert labels["c"]["sysA"] is False
+
+
+def test_build_corpus_rows_labels_all_usable_and_carries_repo(tmp_path):
+    manifest, carried, built, resolved = _fake_multirepo_corpus(tmp_path)
+    rows = evaluate4.build_corpus_rows(
+        manifest, [SYSTEM], carried_root=carried, built_root=built,
+        resolved_dir=resolved, instances=[])
+    by_id = {r.instance_id: r for r in rows}
+    # the empty-endpoint sphinx-2 is dropped; the other two are kept.
+    assert set(by_id) == {"django__django-1", "sphinx-doc__sphinx-1"}
+    # repo carried through
+    assert by_id["django__django-1"].repo == "django"
+    assert by_id["sphinx-doc__sphinx-1"].repo == "sphinx"
+    # labels derived from the resolved set (django resolved, sphinx failed)
+    assert by_id["django__django-1"].failed[SYSTEM] is False
+    assert by_id["sphinx-doc__sphinx-1"].failed[SYSTEM] is True
+    # arm files resolved from the right base dir per source -> real features
+    assert by_id["django__django-1"].features["test_to_fix_hops"] >= 1
+    assert by_id["sphinx-doc__sphinx-1"].features["test_to_fix_hops"] == -1
+
+
+def test_rows_to_frame_has_features_repo_and_label(tmp_path):
+    manifest, carried, built, resolved = _fake_multirepo_corpus(tmp_path)
+    rows = evaluate4.build_corpus_rows(
+        manifest, [SYSTEM], carried_root=carried, built_root=built,
+        resolved_dir=resolved, instances=[])
+    frame = evaluate4.rows_to_frame(rows, SYSTEM)
+    assert len(frame) == 2
+    assert "repo" in frame.columns
+    assert "failed" in frame.columns
+    assert "test_to_fix_hops" in frame.columns
+    assert set(frame["repo"]) == {"django", "sphinx"}

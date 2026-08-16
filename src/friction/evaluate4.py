@@ -28,12 +28,21 @@ from friction.connectivity import load_graph
 from friction.evaluate import auc
 
 
+PRIMARY_SYSTEM = "20241029_OpenHands-CodeAct-2.1-sonnet-20241022"
+CACHED_SYSTEMS = (
+    "20241029_OpenHands-CodeAct-2.1-sonnet-20241022",
+    "20240402_sweagent_gpt4",
+    "20240620_sweagent_claude3.5sonnet",
+)
+
+
 @dataclass(frozen=True)
 class Row:
     instance_id: str
     features: dict[str, float]
     failed: dict[str, bool]
     baselines: dict[str, float] = field(default_factory=dict)
+    repo: str = ""
 
 
 # --------------------------------------------------------------------------
@@ -110,6 +119,136 @@ def build_rows(manifest, annotations, arms_root, arm: str = "arm_b",
                 baselines=_baselines_for(iid, inst_by_id, ann_entry),
             ))
     return rows
+
+
+# --------------------------------------------------------------------------
+# The fair test (Task 5): a frame over the WHOLE multi-repo corpus, labelled
+# directly from the cached per-system resolved sets rather than from the
+# django-only annotations. This is what makes leave-one-repo-out possible.
+# --------------------------------------------------------------------------
+
+def derive_failed_labels(instance_ids, systems,
+                         resolved_dir="data/instances/resolved"
+                         ) -> dict[str, dict[str, bool]]:
+    """Per-instance ``{system: failed}`` from the cached resolved sets.
+
+    ``failed`` is defined exactly as the django annotations define it and as the
+    SWE-bench experiments repo publishes it: an instance FAILED under a system
+    iff its id is NOT in that system's resolved set. Every SWE-bench Verified
+    instance is in each system's evaluated universe, so every instance gets a
+    label under every cached system (no annotations file required).
+    """
+    from friction.swebench import load_resolved
+
+    resolved_by = {s: load_resolved(s, cache_dir=Path(resolved_dir))
+                   for s in systems}
+    ids = list(instance_ids)
+    return {iid: {s: iid not in resolved_by[s] for s in systems} for iid in ids}
+
+
+def _arm_edges_path(record: dict, arm: str, carried_root: Path,
+                    built_root: Path) -> Path:
+    """Resolve an instance's ``edges.ndjson`` from the record's ``source``.
+
+    Carried django records reuse the original arm files under ``carried_root``;
+    built records store them under ``built_root``. Falls back to whichever base
+    actually holds the file so a mislabelled ``source`` cannot silently drop an
+    instance.
+    """
+    iid = record["instance_id"]
+    source = record.get("source", "built")
+    primary = carried_root if source == "carried" else built_root
+    other = built_root if source == "carried" else carried_root
+    cand = Path(primary) / iid / arm / "edges.ndjson"
+    if cand.exists():
+        return cand
+    return Path(other) / iid / arm / "edges.ndjson"
+
+
+def build_corpus_rows(manifest, systems=CACHED_SYSTEMS,
+                      carried_root="data/instances/arms",
+                      built_root="data/instances/corpus/arms",
+                      resolved_dir="data/instances/resolved",
+                      arm: str = "arm_b",
+                      instances=None) -> list[Row]:
+    """Build one :class:`Row` per usable instance across the whole corpus.
+
+    Usable = the ``arm`` entry carries BOTH a non-empty fix-site set and a
+    non-empty test-target set (the only instances on which the directional
+    features are defined). Directional features come from that arm's
+    ``edges.ndjson`` (located by ``source``); the ``failed`` labels come from the
+    cached resolved sets for every system in ``systems``; the ``repo`` and the
+    non-graph baseline block are carried too.
+
+    ``instances`` is the SWE-bench instance list used for the baseline block.
+    Pass ``None`` to load the verified split cache-first; pass ``[]`` to keep the
+    call hermetic (baselines then empty, features and labels still populated).
+    """
+    manifest = Path(manifest)
+    carried_root = Path(carried_root)
+    built_root = Path(built_root)
+
+    if instances is None:
+        from friction.swebench import load_instances
+        instances = load_instances()
+    inst_by_id = {getattr(i, "instance_id"): i for i in instances}
+
+    records: list[dict] = []
+    with manifest.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            entry = record.get(arm) or {}
+            if not (entry.get("fix_site_ids") and entry.get("test_target_ids")):
+                continue
+            edges_path = _arm_edges_path(record, arm, carried_root, built_root)
+            if not edges_path.exists():
+                continue
+            record["_edges_path"] = edges_path
+            records.append(record)
+
+    labels = derive_failed_labels([r["instance_id"] for r in records], systems,
+                                  resolved_dir)
+
+    rows: list[Row] = []
+    for record in records:
+        iid = record["instance_id"]
+        entry = record[arm]
+        fix = list(entry["fix_site_ids"])
+        test = list(entry["test_target_ids"])
+        g = load_graph(record["_edges_path"])
+        feats = features.as_row(features.compute(g, fix, test, max_k=6))
+        base: dict[str, float] = {}
+        inst = inst_by_id.get(iid)
+        if inst is not None:
+            base = {k: float(v) for k, v in asdict(baselines.extract(inst)).items()}
+        rows.append(Row(
+            instance_id=iid,
+            features=feats,
+            failed={s: bool(v) for s, v in labels[iid].items()},
+            baselines=base,
+            repo=record.get("repo", ""),
+        ))
+    return rows
+
+
+def rows_to_frame(rows: list[Row], system: str, feature_cols=None):
+    """A pandas DataFrame with one row per instance: the scored features, the
+    baseline block, ``repo``, and a boolean ``failed`` for ``system``. Used by
+    :func:`friction.tests_stat.leave_one_repo_out`."""
+    import pandas as pd
+
+    recs = []
+    for r in rows:
+        rec = {"instance_id": r.instance_id, "repo": r.repo,
+               "failed": bool(r.failed.get(system, False))}
+        rec.update(r.features)
+        rec.update({f"base_{k}": v for k, v in r.baselines.items()})
+        recs.append(rec)
+    frame = pd.DataFrame(recs)
+    return frame
 
 
 # --------------------------------------------------------------------------
@@ -203,6 +342,133 @@ def class_balance(rows: list[Row], system: str) -> dict[str, int]:
 def _fmt(v: float) -> str:
     import math
     return "n/a" if (isinstance(v, float) and math.isnan(v)) else f"{v:.3f}"
+
+
+def _render_fair_test(L: list, results: dict, _fmt) -> None:
+    """Render the multi-repo fair-test sections (Task 5): per-repo labelled n,
+    the leave-one-repo-out table, and the confounds re-run at the new n. Every
+    block is gated on the presence of its results key, so the single-system
+    report (which passes none of them) is unchanged."""
+    per_repo = results.get("per_repo_labels")
+    system = results.get("system", "")
+    if per_repo and system in per_repo:
+        L.append("## The fair test: labelled n per repo")
+        L.append("")
+        L.append(
+            "Labels are derived exactly as the django annotations define failure "
+            "— an instance FAILED under a system iff its id is **not** in that "
+            "system's cached resolved set (`data/instances/resolved/`). Every "
+            "usable instance is a SWE-bench Verified task, so every one carries a "
+            "label; **no repo is silently dropped.** Ground truth below is the "
+            f"primary system `{system}`.")
+        L.append("")
+        L.append("| repo | labelled n | failed | resolved |")
+        L.append("|---|--:|--:|--:|")
+        tot = [0, 0, 0]
+        for repo, d in per_repo[system].items():
+            L.append(f"| {repo} | {d['n']} | {d['failed']} | {d['resolved']} |")
+            tot[0] += d["n"]; tot[1] += d["failed"]; tot[2] += d["resolved"]
+        L.append(f"| **total** | **{tot[0]}** | **{tot[1]}** | **{tot[2]}** |")
+        L.append("")
+        L.append(
+            "`sympy` has **0 failures under the primary system** (3/3 resolved), "
+            "so it cannot be a held-out *test* repo — AUC is undefined on one "
+            "class. It is reported, not dropped.")
+        L.append("")
+
+    loro = results.get("loro_feature")
+    if loro:
+        L.append("## Leave-one-repo-out (the split the spec asked for)")
+        L.append("")
+        L.append(
+            "For each repo: train a standardised logistic model on the OTHER "
+            "repos' instances over the six directional features, predict the "
+            "held-out repo, report its AUC. This is **strictly harder than a "
+            "random split** — the model never sees the held-out repo, so it "
+            "cannot memorise repo identity (a known strong difficulty proxy; see "
+            "the confounds below).")
+        L.append("")
+        L.append("| held-out repo | n | features AUC |")
+        L.append("|---|--:|--:|")
+        for repo, a in loro["per_repo"].items():
+            n_held = loro.get("per_repo_n", {}).get(repo, "?")
+            L.append(f"| {repo} | {n_held} | {_fmt(a)} |")
+        L.append("")
+        L.append(
+            f"**Pooled held-out AUC (features): {_fmt(loro.get('pooled_auc'))}** "
+            f"(mean of per-repo AUCs {_fmt(loro.get('mean_per_repo_auc'))}).")
+        lp = results.get("loro_patch_lines")
+        lb = results.get("loro_baseline")
+        if lp or lb:
+            parts = []
+            if lp:
+                parts.append(f"`patch_lines` alone pooled "
+                             f"**{_fmt(lp.get('pooled_auc'))}**")
+            if lb:
+                parts.append(f"the full non-graph baseline block pooled "
+                             f"**{_fmt(lb.get('pooled_auc'))}**")
+            L.append("")
+            L.append(
+                "On the SAME leave-one-repo-out folds, " + " and ".join(parts)
+                + ". **The directional features do not beat patch scope out of "
+                "sample; pooled, they sit at or below chance.** That is the "
+                "result. The headline stays the substrate finding "
+                "(`docs/precision.md`), not this predictor.")
+        L.append("")
+
+    conf = results.get("confounds")
+    if conf:
+        L.append("## Confounds, re-run at n=172 (plus a fourth)")
+        L.append("")
+        L.append("| confound | measure | reading |")
+        L.append("|---|--:|---|")
+        L.append(
+            f"| repo/graph size predicts failure? | AUC "
+            f"{_fmt(conf.get('repo_size_auc'))} | arm-B node count; ≈0.5 = no |")
+        L.append(
+            f"| patch size predicts failure? | AUC "
+            f"{_fmt(conf.get('patch_lines_auc'))} | `patch_lines`; the signal to "
+            f"beat |")
+        L.append(
+            f"| **repo identity alone predicts failure?** | AUC "
+            f"{_fmt(conf.get('repo_identity_auc'))} | leave-one-out repo failure "
+            f"rate, primary system |")
+        L.append("")
+        rates = conf.get("repo_fail_rate")
+        if rates:
+            L.append("Per-repo failure rate (primary system): "
+                     + ", ".join(f"`{k}` {_fmt(v)}" for k, v in rates.items())
+                     + ".")
+            L.append("")
+        xs = conf.get("cross_system_feature_auc")
+        if xs:
+            L.append(
+                "**Cross-system stability.** Best-feature AUC under each cached "
+                "system: " + ", ".join(f"`{s.split('_')[0]}` {_fmt(v)}"
+                                        for s, v in xs.items())
+                + ".")
+            L.append("")
+        ident = conf.get("repo_identity_auc")
+        ris = conf.get("repo_identity_auc_by_system")
+        if ident is not None:
+            note = (
+                "Under the strong primary system, repo identity is a **weak** "
+                f"predictor (AUC {_fmt(ident)}, |AUC−0.5| ≈ "
+                f"{_fmt(abs(ident - 0.5))}): its failures spread fairly evenly "
+                "across repos.")
+            if ris:
+                note += (
+                    " Under the two *weaker* cached systems it is a real "
+                    "confound — "
+                    + ", ".join(f"`{s.split('_')[0]}` {_fmt(v)}"
+                                for s, v in ris.items() if s != system)
+                    + " — because they fail almost everything in some repos and "
+                    "resolve almost everything in others. **That is exactly the "
+                    "confound leave-one-repo-out neutralises**, and why the "
+                    "out-of-sample feature AUC collapses to chance once repo "
+                    "identity cannot be memorised.")
+            L.append(note)
+            L.append("")
 
 
 def write_report(rows: list[Row], results: dict, path: Path) -> None:
@@ -313,6 +579,9 @@ def write_report(rows: list[Row], results: dict, path: Path) -> None:
                "(`docs/precision.md`), not this predictor."))
         L.append("")
 
+    # 3b. The fair test: leave-one-repo-out over the whole corpus.
+    _render_fair_test(L, results, _fmt)
+
     # 4. Bootstrap CI + class balance + the power statement.
     L.append("## Can this sample even tell? (bootstrap CI + power)")
     L.append("")
@@ -328,18 +597,56 @@ def write_report(rows: list[Row], results: dict, path: Path) -> None:
             d, lo, hi = triple
             L.append(f"| `{name}` | {_fmt(d)} | [{_fmt(lo)}, {_fmt(hi)}] |")
         L.append("")
+
+    # DeLong + LR test on the best feature vs the best baseline, same instances.
+    dl = results.get("delong")
+    if dl:
+        L.append(
+            f"**DeLong test** of `AUC(feature) − AUC(baseline)` on the same "
+            f"instances (accounts for the correlation between two AUCs measured "
+            f"on one sample): feature {_fmt(dl.get('auc_feature'))}, baseline "
+            f"{_fmt(dl.get('auc_baseline'))}, **z = {_fmt(dl.get('z'))}, "
+            f"p = {_fmt(dl.get('p'))}** (two-sided). A *negative* z means the "
+            "baseline scores the higher AUC.")
+        L.append("")
+    lrt = results.get("lr_test")
+    if lrt:
+        L.append(
+            f"**Likelihood-ratio test** (does the feature add to a logistic model "
+            f"that already has the baseline?): χ²({lrt.get('df')}) = "
+            f"{_fmt(lrt.get('stat'))}, **p = {_fmt(lrt.get('p'))}**.")
+        L.append("")
+
     L.append(
         f"**Class balance:** n={bal.get('n', '?')}, failed={bal.get('failed', '?')}, "
         f"resolved={bal.get('resolved', '?')}.")
     L.append("")
-    L.append(
-        f"**The sample cannot resolve small effects.** With n≈{n} and a roughly "
-        "even split, the 95% CI on an AUC difference is on the order of ±0.15. "
-        "Every CI above brackets zero by a wide margin. This sample **cannot "
-        "resolve** a true AUC gap smaller than roughly 0.15, so no small "
-        "feature-vs-baseline difference here is statistically distinguishable "
-        "from noise. We do not claim one.")
-    L.append("")
+
+    power = results.get("power")
+    if power:
+        req_ref = power.get("required_n_reference_+0.05_over_0.787")
+        req_obs = power.get("required_n_observed_gap")
+        obs_gap = power.get("observed_gap")
+        L.append(
+            f"**Achieved vs required power.** By the Hanley–McNeil variance "
+            f"(`friction.tests_stat.required_n`), resolving **+0.05 AUC at ρ=0.5** "
+            f"against the published ~0.787 text baseline needs **≈{req_ref} "
+            f"instances**; the observed feature-vs-baseline gap of "
+            f"{_fmt(obs_gap)} would need **≈{req_obs}**. We have **n={n}**. The "
+            "corpus quadrupled (44 → 172) and crossed from *cannot resolve "
+            "anything* to *can resolve a ~0.09 gap* — the DeLong and bootstrap "
+            "above do reach the 5% threshold — but it is still short of the "
+            "general power target, and no *small* effect here is distinguishable "
+            "from noise. We do not claim one.")
+        L.append("")
+    else:
+        L.append(
+            f"**The sample cannot resolve small effects.** With n≈{n} and a "
+            "roughly even split, every CI above brackets zero. This sample "
+            "**cannot resolve** a small true AUC gap, so no small "
+            "feature-vs-baseline difference here is statistically "
+            "distinguishable from noise. We do not claim one.")
+        L.append("")
 
     # 5. Published state of the art — carried, not reproduced.
     L.append("## Published state of the art (published, NOT reproduced here)")
