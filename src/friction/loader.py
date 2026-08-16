@@ -70,6 +70,13 @@ NODE_PROPS = {
     "Class": ["id", "sid", "name", "file_id"],
     "Function": ["id", "sid", "name", "file_id", "line_start", "line_end",
                  "cyclomatic", "is_test"],
+    # The typed arm (friction.arms.emit_typed_arm) keys Function/Test/Class nodes
+    # by their SCIP canonical (`qual`) rather than a tree-sitter file_id, and adds
+    # two labels the v1 SymbolTable never produced. `load` derives the SET props
+    # from the rows themselves, so these entries document the typed-arm shape and
+    # back `node_statement` for the two new labels.
+    "Test": ["id", "sid", "name", "qual", "is_test"],
+    "ConfigKey": ["id", "sid", "name"],
 }
 
 
@@ -155,7 +162,7 @@ def load(transport, caps: Capabilities, out_dir: Path,
     # carry NODE_PROPS[label]; the Task-7 arm nodes carry a leaner {sid,name,qual}.
     # A fixed v1-shaped statement rejected every arm batch on the live engine
     # ("UNWIND row 0 is missing field cyclomatic").
-    ordered = ["File", "Class", "Function"]
+    ordered = ["File", "Class", "Function", "Test", "ConfigKey"]
     labels = ordered + [lbl for lbl in by_label if lbl not in ordered]
     for label in labels:
         rows = by_label.get(label, [])

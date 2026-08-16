@@ -109,3 +109,66 @@ def test_load_never_sends_inline_lists(tmp_path):
     for cypher, params in t.calls:
         assert "UNWIND [" not in cypher
         assert "rows" in params
+
+
+# --- typed graph (five labels, seven edge types) round-trips --------------
+
+def test_node_props_cover_the_two_new_labels():
+    assert "Test" in loader.NODE_PROPS
+    assert "ConfigKey" in loader.NODE_PROPS
+    assert loader.NODE_PROPS["ConfigKey"] == ["id", "sid", "name"]
+
+
+def test_node_statement_builds_for_test_and_config_key():
+    for label in ("Test", "ConfigKey"):
+        stmt = loader.node_statement(CAPS, label)
+        assert stmt.startswith(f"UNWIND $rows AS row MERGE (n {{id: row.id}}) SET n:{label}")
+        assert "n.sid = row.sid" in stmt
+
+
+def _emit_typed_graph(tmp_path):
+    from friction import arms
+    from friction.config_keys import ConfigRead
+    from friction.scip.extract import CallEdge, Def, TypedEdge
+
+    def sym(t):
+        return f"scip-python python p 1 `{t}"
+
+    defs = [
+        Def(sym("m`/C#"), "m.py", 0, 20, "m::C#", "class"),
+        Def(sym("m`/Base#"), "m.py", 30, 40, "m::Base#", "class"),
+        Def(sym("m`/C#save()."), "m.py", 2, 8, "m::C#save().", "function"),
+        Def(sym("m`/run()."), "m.py", 22, 28, "m::run().", "function"),
+        Def(sym("tests.t`/test_it()."), "tests/t.py", 0, 6,
+            "tests.t::test_it().", "function"),
+    ]
+    arms.emit_typed_arm(
+        [CallEdge("m::run().", "m::C#save().", False, 2),
+         CallEdge("tests.t::test_it().", "m::C#save().", False, 1)],
+        defs, ["m.py", "tests/t.py"],
+        [TypedEdge("m::C#save().", "m.py", "DEFINED_IN"),
+         TypedEdge("m::C#", "m::C#save().", "HAS_METHOD"),
+         TypedEdge("m::C#", "m::Base#", "INHERITS"),
+         TypedEdge("tests/t.py", "m.py", "IMPORTS")],
+        [ConfigRead("m::run().", "DEBUG")],
+        band=20_000_000_000, out_dir=tmp_path,
+        covers=[("tests.t::test_it().", "m::C#save().")])
+
+
+def test_typed_graph_round_trips_every_node_label_and_edge_type(tmp_path):
+    _emit_typed_graph(tmp_path)
+    t = RecordingTransport()
+    counts = loader.load(t, CAPS, tmp_path, batch_size=1000)
+    # every new label loaded
+    for label in ("File", "Class", "Function", "Test", "ConfigKey"):
+        assert counts.get(label, 0) >= 1, label
+    # all seven edge types loaded
+    for rel in ("CALLS", "DEFINED_IN", "HAS_METHOD", "INHERITS", "IMPORTS",
+                "READS_CONFIG", "COVERS"):
+        assert counts.get(rel, 0) >= 1, rel
+    # nodes before edges, and no batch exceeds the engine's 1024 cap
+    last_node = max(i for i, c in enumerate(t.calls) if "MERGE (n {id: row.id})" in c[0])
+    first_edge = min(i for i, c in enumerate(t.calls) if "]->" in c[0])
+    assert last_node < first_edge
+    for _cypher, params in t.calls:
+        assert len(params["rows"]) <= 1024

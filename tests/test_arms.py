@@ -3,7 +3,8 @@ import json
 import pytest
 
 from friction import arms
-from friction.scip.extract import CallEdge, Def
+from friction.config_keys import ConfigRead
+from friction.scip.extract import CallEdge, Def, TypedEdge
 from friction.parsing.symbols import FileSym, FunctionSym, SymbolTable
 
 
@@ -61,6 +62,146 @@ def test_emit_exposes_qual_to_id_matching_the_written_ids(tmp_path):
     rows = [json.loads(l) for l in (tmp_path / "nodes.ndjson").read_text().splitlines()]
     for r in rows:
         assert id_by_qual[r["qual"]] == r["id"]
+
+
+# --- emit_typed_arm: all five labels, all seven edge types ----------------
+
+def _sym(tail):
+    return f"scip-python python p 1 `{tail}"
+
+
+def _typed_inputs():
+    """A tiny but complete typed graph: a class, its method, a module function,
+    a base class, a test, plus every structural / config / covers edge type."""
+    defs = [
+        Def(_sym("m`/C#"), "m.py", 0, 20, "m::C#", "class"),
+        Def(_sym("m`/Base#"), "m.py", 30, 40, "m::Base#", "class"),
+        Def(_sym("m`/C#save()."), "m.py", 2, 8, "m::C#save().", "function"),
+        Def(_sym("m`/run()."), "m.py", 22, 28, "m::run().", "function"),
+        Def(_sym("tests.t`/test_it()."), "tests/t.py", 0, 6,
+            "tests.t::test_it().", "function"),
+    ]
+    files = ["m.py", "tests/t.py"]
+    call_edges = [
+        CallEdge("m::run().", "m::C#save().", False, 2),
+        CallEdge("tests.t::test_it().", "m::C#save().", False, 1),
+    ]
+    structural = [
+        TypedEdge("m::C#save().", "m.py", "DEFINED_IN"),
+        TypedEdge("m::C#", "m::C#save().", "HAS_METHOD"),
+        TypedEdge("m::C#", "m::Base#", "INHERITS"),
+        TypedEdge("tests/t.py", "m.py", "IMPORTS"),
+    ]
+    config_reads = [
+        ConfigRead("m::run().", "DEBUG"),
+        ConfigRead("m::run().", "DEBUG"),      # duplicate collapses
+        ConfigRead(None, "SECRET_KEY"),        # module scope: key but no edge
+    ]
+    covers = [("tests.t::test_it().", "m::C#save().")]
+    return call_edges, defs, files, structural, config_reads, covers
+
+
+def _emit_typed(tmp_path, **over):
+    ce, defs, files, structural, cr, covers = _typed_inputs()
+    return arms.emit_typed_arm(ce, defs, files, structural, cr,
+                               band=20_000_000_000, out_dir=tmp_path,
+                               covers=covers, **over)
+
+
+def _nodes(tmp_path):
+    return [json.loads(l) for l in
+            (tmp_path / "nodes.ndjson").read_text().splitlines()]
+
+
+def _edges(tmp_path):
+    return [json.loads(l) for l in
+            (tmp_path / "edges.ndjson").read_text().splitlines()]
+
+
+def test_typed_emits_all_five_node_labels(tmp_path):
+    _emit_typed(tmp_path)
+    labels = {n["label"] for n in _nodes(tmp_path)}
+    assert labels == {"File", "Class", "Function", "Test", "ConfigKey"}
+
+
+def test_typed_emits_all_seven_edge_types(tmp_path):
+    stats = _emit_typed(tmp_path)
+    types = {e["type"] for e in _edges(tmp_path)}
+    assert types == {"CALLS", "DEFINED_IN", "HAS_METHOD", "INHERITS",
+                     "IMPORTS", "READS_CONFIG", "COVERS"}
+    assert set(stats["edge_types"]) == types
+
+
+def test_typed_labels_a_test_path_function_as_test(tmp_path):
+    _emit_typed(tmp_path)
+    by_qual = {n.get("qual"): n for n in _nodes(tmp_path) if "qual" in n}
+    assert by_qual["tests.t::test_it()."]["label"] == "Test"
+    assert by_qual["m::run()."]["label"] == "Function"
+
+
+def test_typed_sid_is_the_string_id_on_every_node(tmp_path):
+    _emit_typed(tmp_path)
+    for n in _nodes(tmp_path):
+        assert n["sid"] == str(n["id"])
+        assert isinstance(n["sid"], str)
+
+
+def test_typed_creates_one_config_key_per_distinct_name(tmp_path):
+    _emit_typed(tmp_path)
+    ck = [n for n in _nodes(tmp_path) if n["label"] == "ConfigKey"]
+    assert sorted(n["name"] for n in ck) == ["DEBUG", "SECRET_KEY"]
+
+
+def test_typed_reads_config_edge_only_from_a_function_reader(tmp_path):
+    stats = _emit_typed(tmp_path)
+    # DEBUG is read from run(); SECRET_KEY only at module scope -> one edge.
+    assert stats["edge_types"]["READS_CONFIG"] == 1
+
+
+def test_typed_covers_edge_originates_at_a_test(tmp_path):
+    stats = _emit_typed(tmp_path)
+    assert stats["edge_types"]["COVERS"] == 1
+    assert stats["covers_from_test"] == 1
+
+
+def test_typed_emission_is_deterministic(tmp_path):
+    _emit_typed(tmp_path / "one")
+    _emit_typed(tmp_path / "two")
+    assert (tmp_path / "one" / "nodes.ndjson").read_text() == \
+           (tmp_path / "two" / "nodes.ndjson").read_text()
+    assert (tmp_path / "one" / "edges.ndjson").read_text() == \
+           (tmp_path / "two" / "edges.ndjson").read_text()
+
+
+def test_typed_ids_are_band_local_and_string_mirrored(tmp_path):
+    stats = _emit_typed(tmp_path)
+    for n in _nodes(tmp_path):
+        assert 20_000_000_000 <= n["id"] < 20_010_000_000
+    # id_by_qual maps canonical -> id for endpoint resolution downstream.
+    assert stats["id_by_qual"]["m::C#save()."] in {n["id"] for n in _nodes(tmp_path)}
+
+
+def test_typed_drops_and_counts_an_edge_to_a_missing_node(tmp_path):
+    ce, defs, files, structural, cr, covers = _typed_inputs()
+    structural = structural + [TypedEdge("m::C#", "m::Ghost#", "INHERITS")]
+    stats = arms.emit_typed_arm(ce, defs, files, structural, cr,
+                                band=20_000_000_000, out_dir=tmp_path,
+                                covers=covers)
+    assert stats["dropped_edges"].get("INHERITS") == 1
+
+
+# --- is_test_function -----------------------------------------------------
+
+def test_is_test_function_by_name_prefix():
+    assert arms.is_test_function("django/db/x.py", "test_save") is True
+
+
+def test_is_test_function_by_test_directory():
+    assert arms.is_test_function("tests/model_forms/tests.py", "helper") is True
+
+
+def test_is_not_a_test_for_ordinary_code():
+    assert arms.is_test_function("django/db/models/query.py", "filter") is False
 
 
 # --- endpoint mapping: arm A ----------------------------------------------

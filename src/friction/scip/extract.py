@@ -113,3 +113,151 @@ def extract_edges(index) -> tuple[list[CallEdge], dict]:
         "external_edges": sum(1 for e in edges if e.dst_external),
     }
     return edges, stats
+
+
+# --- typed nodes and structural edges -------------------------------------
+#
+# ``extract_edges`` above keeps only CALLS. Everything the build spec's other
+# edge types (DEFINED_IN, HAS_METHOD, INHERITS, IMPORTS) need is already sitting
+# in the same SCIP index -- in the definition spans and the reference
+# occurrences -- and was simply discarded. These functions recover it.
+
+
+@dataclass(frozen=True)
+class TypedEdge:
+    src: str
+    dst: str
+    type: str
+
+
+def collect_files(defs: list[Def]) -> list[str]:
+    """Distinct file paths that hold at least one definition, sorted."""
+    return sorted({d.path for d in defs})
+
+
+def enclosing_class(func_canonical: str) -> str | None:
+    """The class canonical that encloses a method canonical, or None.
+
+    ``m::C#save().`` -> ``m::C#``; ``m::Outer#Inner#f().`` -> ``m::Outer#Inner#``;
+    ``m::run().`` (module-level function) -> None.
+    """
+    module, sep, rest = func_canonical.partition("::")
+    if not sep or "#" not in rest:
+        return None
+    return f"{module}::{rest[:rest.rfind('#') + 1]}"
+
+
+def defined_in_edges(defs: list[Def]) -> list[TypedEdge]:
+    """Function -> File, for every function definition (DEFINED_IN)."""
+    return [TypedEdge(d.canonical, d.path, "DEFINED_IN")
+            for d in defs if d.kind == "function"]
+
+
+def has_method_edges(defs: list[Def]) -> list[TypedEdge]:
+    """Class -> Function, for every method whose enclosing class is defined here."""
+    class_canons = {d.canonical for d in defs if d.kind == "class"}
+    out: list[TypedEdge] = []
+    for d in defs:
+        if d.kind != "function":
+            continue
+        cls = enclosing_class(d.canonical)
+        if cls is not None and cls in class_canons:
+            out.append(TypedEdge(cls, d.canonical, "HAS_METHOD"))
+    return out
+
+
+def inherits_edges(index, defs: list[Def]) -> list[TypedEdge]:
+    """Class -> Class (INHERITS), from base classes named on the class header.
+
+    A reference to an internal class symbol whose occurrence line is the START
+    line of a class definition is a base class in that class's ``class Foo(Bar):``
+    header. Deduplicated; self-references dropped.
+    """
+    class_canons = {d.canonical for d in defs if d.kind == "class"}
+    headers: dict[tuple[str, int], list[str]] = defaultdict(list)
+    for d in defs:
+        if d.kind == "class":
+            headers[(d.path, d.start)].append(d.canonical)
+
+    seen: set[tuple[str, str]] = set()
+    out: list[TypedEdge] = []
+    for doc in index.documents:
+        for occ in doc.occurrences:
+            if occ.symbol_roles & DEFINITION_ROLE:
+                continue
+            sym = parse_symbol(occ.symbol)
+            if sym.kind != "class" or sym.is_external:
+                continue
+            rng = list(occ.range)
+            if not rng:
+                continue
+            subclasses = headers.get((doc.relative_path, rng[0]))
+            if not subclasses:
+                continue
+            base = canonical(sym, None)
+            if base not in class_canons:
+                continue
+            for sub in subclasses:
+                if sub == base or (sub, base) in seen:
+                    continue
+                seen.add((sub, base))
+                out.append(TypedEdge(sub, base, "INHERITS"))
+    return out
+
+
+def imports_edges(index, defs: list[Def]) -> list[TypedEdge]:
+    """File -> File (IMPORTS), from module-level references to internal defs.
+
+    An import statement sits at module scope, so its reference to an imported
+    symbol is enclosed by NO definition. Resolving that symbol's canonical back to
+    the file that defines it yields a file-to-file import edge. Deduplicated;
+    same-file references dropped.
+    """
+    by_path: dict[str, list[Def]] = defaultdict(list)
+    path_by_canonical: dict[str, str] = {}
+    for d in defs:
+        by_path[d.path].append(d)
+        path_by_canonical.setdefault(d.canonical, d.path)
+
+    seen: set[tuple[str, str]] = set()
+    out: list[TypedEdge] = []
+    for doc in index.documents:
+        for occ in doc.occurrences:
+            if occ.symbol_roles & DEFINITION_ROLE:
+                continue
+            sym = parse_symbol(occ.symbol)
+            if sym.is_external or sym.kind == "other":
+                continue
+            rng = list(occ.range)
+            if not rng:
+                continue
+            if innermost(by_path, doc.relative_path, rng[0]) is not None:
+                continue  # inside a function/class body: not a top-level import
+            target = path_by_canonical.get(canonical(sym, None))
+            if target is None or target == doc.relative_path:
+                continue
+            key = (doc.relative_path, target)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(TypedEdge(doc.relative_path, target, "IMPORTS"))
+    return out
+
+
+def structural_edges(index, defs: list[Def] | None = None
+                     ) -> tuple[list[TypedEdge], dict]:
+    """All four non-CALLS structural edge types plus a per-type census."""
+    if defs is None:
+        defs = collect_definitions(index)
+    di = defined_in_edges(defs)
+    hm = has_method_edges(defs)
+    inh = inherits_edges(index, defs)
+    imp = imports_edges(index, defs)
+    edges = di + hm + inh + imp
+    stats = {
+        "DEFINED_IN": len(di),
+        "HAS_METHOD": len(hm),
+        "INHERITS": len(inh),
+        "IMPORTS": len(imp),
+    }
+    return edges, stats

@@ -119,6 +119,189 @@ def emit_arm(edges, band: int, out_dir: Path) -> dict:
             "id_by_qual": id_by_qual}
 
 
+# --- typed emission (all five node labels, all seven edge types) -----------
+#
+# ``emit_arm`` above emits Function nodes and CALLS edges only -- it is what the
+# shipped graph was built with, and it discards everything else SCIP already
+# knows. ``emit_typed_arm`` keeps it: File / Class / Function / Test / ConfigKey
+# nodes and CALLS / DEFINED_IN / HAS_METHOD / INHERITS / IMPORTS / READS_CONFIG /
+# COVERS edges, in one deterministic band-local id space that round-trips through
+# ``friction.loader``.
+
+_TEST_DIR_SEGMENTS = ("tests",)
+
+
+def is_test_function(path: str, name: str,
+                     test_prefixes: tuple[str, ...] = ("tests/",)) -> bool:
+    """A function under a test root, or whose name is a ``test_*``, is a Test.
+
+    Django keeps its suite under ``tests/`` (both the repo-root tree and
+    app-level ``tests`` packages), and unittest test methods are named
+    ``test_<something>`` -- either signal is sufficient.
+    """
+    if name.startswith("test_"):
+        return True
+    p = path.replace("\\", "/")
+    if any(p.startswith(pre) for pre in test_prefixes):
+        return True
+    segments = p.split("/")
+    if any(seg in _TEST_DIR_SEGMENTS for seg in segments[:-1]):
+        return True
+    leaf = segments[-1] if segments else ""
+    return leaf == "tests.py" or leaf.startswith("test_")
+
+
+def _leaf_name(symbol: str, canonical: str) -> str:
+    from friction.scip.symbols import parse_symbol
+    name = parse_symbol(symbol).name
+    if name:
+        return name
+    rest = canonical.split("::", 1)[-1].rstrip("().#")
+    return rest.split("#")[-1].split("/")[-1].split(".")[-1]
+
+
+def _config_identity(key: str) -> str:
+    return f"config::{key}"
+
+
+def emit_typed_arm(call_edges, defs, files, structural, config_reads, band: int,
+                   out_dir: Path, covers=None,
+                   test_prefixes: tuple[str, ...] = ("tests/",)) -> dict:
+    """Write the fully-typed graph for one arm as loader-ready NDJSON.
+
+    ``call_edges`` are internal ``CallEdge``s; ``defs`` the SCIP definitions;
+    ``files`` the distinct file paths; ``structural`` the DEFINED_IN / HAS_METHOD
+    / INHERITS / IMPORTS ``TypedEdge``s; ``config_reads`` the ``ConfigRead``s;
+    ``covers`` optional ``(test_canonical, function_canonical)`` pairs.
+
+    Node ids are assigned deterministically -- File, then Class, then
+    Function/Test, then ConfigKey, each group sorted by identity -- so the whole
+    emission is a pure function of its inputs. Every node carries the string
+    ``sid`` mirror the engine's ``algo.*`` queries address. An edge endpoint that
+    is not a node is dropped and COUNTED, never emitted against a phantom id.
+    """
+    from friction.config_keys import config_keys, reads_config_pairs
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    class_defs = sorted((d for d in defs if d.kind == "class"),
+                        key=lambda d: d.canonical)
+    func_defs = sorted((d for d in defs if d.kind == "function"),
+                       key=lambda d: d.canonical)
+    keys = config_keys(config_reads)
+
+    # Deterministic id assignment across all node groups.
+    rows: list[dict] = []
+    id_by_qual: dict[str, int] = {}
+    offset = 0
+
+    def _assign(identity: str) -> int:
+        nonlocal offset
+        nid = band + offset
+        id_by_qual[identity] = nid
+        offset += 1
+        return nid
+
+    # Every node carries `qual` (its identity) as well as `sid`: downstream
+    # identity joins (friction.covers3) read `qual`, so a typed nodes.ndjson must
+    # not omit it on File/ConfigKey rows.
+    label_counts: dict[str, int] = defaultdict(int)
+    for path in sorted(files):
+        rows.append({"label": "File", "id": _assign(path), "sid": None,
+                     "path": path, "qual": path})
+        label_counts["File"] += 1
+    for d in class_defs:
+        rows.append({"label": "Class", "id": _assign(d.canonical), "sid": None,
+                     "name": _leaf_name(d.symbol, d.canonical), "qual": d.canonical})
+        label_counts["Class"] += 1
+    for d in func_defs:
+        is_test = is_test_function(d.path, _leaf_name(d.symbol, d.canonical),
+                                   test_prefixes)
+        label = "Test" if is_test else "Function"
+        rows.append({"label": label, "id": _assign(d.canonical), "sid": None,
+                     "name": _leaf_name(d.symbol, d.canonical), "qual": d.canonical,
+                     "is_test": is_test})
+        label_counts[label] += 1
+    for key in keys:
+        identity = _config_identity(key)
+        rows.append({"label": "ConfigKey", "id": _assign(identity),
+                     "sid": None, "name": key, "qual": identity})
+        label_counts["ConfigKey"] += 1
+
+    for r in rows:
+        r["sid"] = str(r["id"])
+
+    test_ids = {r["id"] for r in rows if r["label"] == "Test"}
+
+    # Edges. Each is (src_identity, dst_identity, type, weight).
+    typed: list[tuple[str, str, str, int]] = []
+    for e in call_edges:
+        typed.append((e.src, e.dst, "CALLS", int(getattr(e, "weight", 1))))
+    for te in structural:
+        typed.append((te.src, te.dst, te.type, 1))
+    for reader, key in reads_config_pairs(config_reads):
+        typed.append((reader, _config_identity(key), "READS_CONFIG", 1))
+    covers_pairs = sorted(set(covers or []))
+    for s, d in covers_pairs:
+        typed.append((s, d, "COVERS", 1))
+
+    edge_counts: dict[str, int] = defaultdict(int)
+    dropped: dict[str, int] = defaultdict(int)
+    covers_from_test = 0
+    with (out_dir / "edges.ndjson").open("w", encoding="utf-8") as fh:
+        for s, d, etype, weight in typed:
+            si = id_by_qual.get(s)
+            di = id_by_qual.get(d)
+            if si is None or di is None:
+                dropped[etype] += 1
+                continue
+            if etype == "COVERS" and si in test_ids:
+                covers_from_test += 1
+            fh.write(json.dumps({"src": si, "dst": di, "type": etype,
+                                 "weight": weight}) + "\n")
+            edge_counts[etype] += 1
+
+    with (out_dir / "nodes.ndjson").open("w", encoding="utf-8") as fh:
+        for r in rows:
+            fh.write(json.dumps(r) + "\n")
+
+    return {
+        "nodes": len(rows),
+        "edges": sum(edge_counts.values()),
+        "band": band,
+        "node_labels": dict(label_counts),
+        "edge_types": dict(edge_counts),
+        "dropped_edges": dict(dropped),
+        "covers_from_test": covers_from_test,
+        "id_by_qual": id_by_qual,
+    }
+
+
+def build_typed_arm(index, call_edges, defs, band: int, out_dir: Path,
+                    source_reader=None, covers=None,
+                    test_prefixes: tuple[str, ...] = ("tests/",)) -> dict:
+    """Assemble every typed component from a SCIP index and emit it.
+
+    Convenience wrapper: derives files, structural edges and config reads from
+    ``index`` (``source_reader`` supplies text for the ``settings.<NAME>`` reads;
+    without it ConfigKey/READS_CONFIG are simply absent and reported as 0), then
+    calls :func:`emit_typed_arm`.
+    """
+    from friction.config_keys import extract_config_reads
+    from friction.scip.extract import collect_files, structural_edges
+
+    files = collect_files(defs)
+    structural, _ = structural_edges(index, defs)
+    if source_reader is not None:
+        config_reads, _ = extract_config_reads(index, source_reader, defs)
+    else:
+        config_reads = []
+    return emit_typed_arm(call_edges, defs, files, structural, config_reads,
+                          band, out_dir, covers=covers,
+                          test_prefixes=test_prefixes)
+
+
 # --- endpoint mapping -----------------------------------------------------
 
 def _map_canonicals(canonicals: list[str], id_by_qual: dict[str, int]
@@ -418,8 +601,17 @@ def build_instance(instance, repo_root: Path, idx: int, out_root: Path) -> dict:
     finally:
         _restore(repo_root)
 
+    # arm A stays name-matched tree-sitter (CALLS/Function only -- no SCIP defs).
     a_out = emit_arm(a_edges, bands.arm_a, inst_dir / "arm_a")
-    b_out = emit_arm(b_internal, bands.arm_b, inst_dir / "arm_b")
+    # arm B is type-resolved and now emits the FULL typed graph: File / Class /
+    # Function / Test / ConfigKey nodes and CALLS / DEFINED_IN / HAS_METHOD /
+    # INHERITS / IMPORTS / READS_CONFIG edges (COVERS is folded in later, at
+    # analysis time, by friction.covers3). Source for the settings reads is read
+    # at base_commit via git show, never from the (already restored) working tree.
+    from friction.config_keys import git_source_reader
+    reader = git_source_reader(repo_root, instance.base_commit)
+    b_out = build_typed_arm(index, b_internal, b_defs, bands.arm_b,
+                            inst_dir / "arm_b", source_reader=reader)
     a_id_by_qual = a_out.pop("id_by_qual")
     b_id_by_qual = b_out.pop("id_by_qual")
 

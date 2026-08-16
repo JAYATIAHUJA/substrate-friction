@@ -103,3 +103,110 @@ def test_references_outside_any_definition_are_counted_not_silently_lost():
     edges, stats = E.extract_edges(idx)
     assert edges == []
     assert stats["unenclosed_references"] == 1
+
+
+# --- typed nodes and structural edges -------------------------------------
+
+CLASS_C = "scip-python python p 1 `m`/C#"
+CLASS_BASE = "scip-python python p 1 `m`/Base#"
+M_SAVE = "scip-python python p 1 `m`/C#save()."
+
+
+def test_enclosing_class_of_a_method():
+    assert E.enclosing_class("m::C#save().") == "m::C#"
+    assert E.enclosing_class("m::Outer#Inner#f().") == "m::Outer#Inner#"
+
+
+def test_enclosing_class_of_a_module_level_function_is_none():
+    assert E.enclosing_class("m::run().") is None
+
+
+def test_collect_files_are_distinct_and_sorted():
+    idx = _index({
+        "b.py": [(F_OUTER, schema.DEFINITION_ROLE, [0, 0, 0, 5], [0, 0, 2, 0])],
+        "a.py": [(F_CALLEE, schema.DEFINITION_ROLE, [0, 0, 0, 5], [0, 0, 2, 0])],
+    })
+    assert E.collect_files(E.collect_definitions(idx)) == ["a.py", "b.py"]
+
+
+def test_defined_in_links_each_function_to_its_file():
+    idx = _index({"m.py": [
+        (F_OUTER, schema.DEFINITION_ROLE, [0, 0, 0, 5], [0, 0, 10, 0])]})
+    edges = E.defined_in_edges(E.collect_definitions(idx))
+    assert edges == [E.TypedEdge("m::outer().", "m.py", "DEFINED_IN")]
+
+
+def test_has_method_links_class_to_its_method():
+    idx = _index({"m.py": [
+        (CLASS_C, schema.DEFINITION_ROLE, [0, 0, 0, 7], [0, 0, 20, 0]),
+        (M_SAVE, schema.DEFINITION_ROLE, [2, 4, 2, 8], [2, 4, 6, 0]),
+    ]})
+    edges = E.has_method_edges(E.collect_definitions(idx))
+    assert E.TypedEdge("m::C#", "m::C#save().", "HAS_METHOD") in edges
+
+
+def test_has_method_omitted_when_class_not_defined_here():
+    # a method whose enclosing class has no definition in this index yields no
+    # HAS_METHOD edge (nothing to hang it off).
+    idx = _index({"m.py": [
+        (M_SAVE, schema.DEFINITION_ROLE, [2, 4, 2, 8], [2, 4, 6, 0])]})
+    assert E.has_method_edges(E.collect_definitions(idx)) == []
+
+
+def test_inherits_reads_base_class_from_the_class_header_line():
+    # class C(Base): on line 5 -> a reference to Base on line 5.
+    idx = _index({"m.py": [
+        (CLASS_C, schema.DEFINITION_ROLE, [5, 0, 5, 7], [5, 0, 20, 0]),
+        (CLASS_BASE, schema.DEFINITION_ROLE, [0, 0, 0, 10], [0, 0, 3, 0]),
+        (CLASS_BASE, 0, [5, 8, 5, 12], None),
+    ]})
+    defs = E.collect_definitions(idx)
+    assert E.inherits_edges(idx, defs) == [
+        E.TypedEdge("m::C#", "m::Base#", "INHERITS")]
+
+
+def test_inherits_ignores_a_class_reference_off_the_header_line():
+    # a reference to Base inside C's body (line 10) is not a base class.
+    idx = _index({"m.py": [
+        (CLASS_C, schema.DEFINITION_ROLE, [5, 0, 5, 7], [5, 0, 20, 0]),
+        (CLASS_BASE, schema.DEFINITION_ROLE, [0, 0, 0, 10], [0, 0, 3, 0]),
+        (CLASS_BASE, 0, [10, 8, 10, 12], None),
+    ]})
+    defs = E.collect_definitions(idx)
+    assert E.inherits_edges(idx, defs) == []
+
+
+def test_imports_links_files_from_a_module_level_reference():
+    # a.py references outer() (defined in m.py) at module scope (no enclosing def).
+    idx = _index({
+        "m.py": [(F_OUTER, schema.DEFINITION_ROLE, [0, 0, 0, 5], [0, 0, 10, 0])],
+        "a.py": [(F_OUTER, 0, [0, 0, 0, 5], None)],
+    })
+    defs = E.collect_definitions(idx)
+    assert E.imports_edges(idx, defs) == [
+        E.TypedEdge("a.py", "m.py", "IMPORTS")]
+
+
+def test_imports_ignores_references_inside_a_function_body():
+    # the same reference, but now enclosed by a.py's own function -> not an import.
+    idx = _index({
+        "m.py": [(F_OUTER, schema.DEFINITION_ROLE, [0, 0, 0, 5], [0, 0, 10, 0])],
+        "a.py": [
+            (F_CALLEE, schema.DEFINITION_ROLE, [0, 0, 0, 6], [0, 0, 9, 0]),
+            (F_OUTER, 0, [3, 4, 3, 9], None),
+        ],
+    })
+    defs = E.collect_definitions(idx)
+    assert E.imports_edges(idx, defs) == []
+
+
+def test_structural_edges_reports_a_per_type_census():
+    idx = _index({"m.py": [
+        (CLASS_C, schema.DEFINITION_ROLE, [5, 0, 5, 7], [5, 0, 20, 0]),
+        (M_SAVE, schema.DEFINITION_ROLE, [6, 4, 6, 8], [6, 4, 10, 0]),
+    ]})
+    edges, stats = E.structural_edges(idx)
+    assert stats["DEFINED_IN"] == 1
+    assert stats["HAS_METHOD"] == 1
+    assert stats["INHERITS"] == 0
+    assert stats["IMPORTS"] == 0
