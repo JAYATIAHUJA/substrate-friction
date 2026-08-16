@@ -4,7 +4,32 @@ The working corpus, `data/instances/arms/`, is **4.0 GB**: per instance it holds
 the full `index.scip` (~67 MB, the pyright SCIP index) and the *complete* arm-A
 and arm-B call graphs. None of that is needed to *run* the product. This
 directory is the **17 MB** distillation `setup.sh` loads, so **no judge ever
-re-indexes Django or re-parses a repo**.
+re-indexes Django or re-parses a repo**. Real size on disk: **17,193,949 bytes
+(~16.4 MiB)**, comfortably under the 50 MB ceiling.
+
+## What ships vs. what is cut — say it plainly
+
+This payload ships the **50 django instances** that back every demo, CLI example,
+and video shot (`friction compare/list/check --issue django__django-…`, and the
+`python -m friction.viz` figures). It does **not** ship the multi-repo fair-test
+corpus, and cannot:
+
+- The **fair-test corpus is 7 repos, 179 built / 172 usable** (django 44, sphinx
+  44, matplotlib 33, xarray 21, pytest 19, requests 8, sympy 3). Its arm files
+  live under `data/instances/corpus/` — **~500 MB, git-ignored** — because a full
+  scip type-index of the scientific repos runs 12–18+ min/instance. That is a
+  *regeneration input*, ten times the size of this whole payload; shipping it is
+  neither possible under the 50 MB ceiling nor necessary to run the product.
+- What ships **instead** is the corpus's committed *output*: `docs/corpus.md`
+  (the per-repo census) and `docs/evaluation.md` (the leave-one-repo-out fair
+  test — pooled held-out AUC, DeLong `p=0.046`, the confounds). `friction eval`
+  and `friction connectivity` print those committed reports; they do not read the
+  corpus arm files, so a clean clone reproduces the *reported numbers* without the
+  500 MB behind them. This is the same cut as `docs/graph-delta.md`: report
+  committed, regeneration inputs omitted.
+
+So: **django (50) ships; the other six repos' 129 instances do not** — their
+result is in `docs/`.
 
 ## What is here
 
@@ -88,7 +113,11 @@ Built and loaded against HydraDB `02a40025d2d57e97ab2754c8256219cdbfeab379`
 
 The **headline** is the substrate finding: a name-matched call graph's edges have
 a **precision ceiling of 0.746** against the type-resolved graph (Jaccard 0.3143)
-— run `friction delta`. The secondary, honestly-null result is a **scoped NO-GO**
-on per-instance prediction (arm A, f1 / path-multiplicity only, AUC 0.631, n=18;
-bootstrap 95% CI on the gap to `patch_lines` spans zero) — run `friction eval`.
-Neither is dressed up.
+— run `friction delta`. The secondary result is a **scoped, and now SIGNIFICANT,
+NO-GO** on per-instance prediction: on the 7-repo fair test (**n=172**,
+leave-one-repo-out) the directional features pool to a held-out AUC of **0.483**
+(≤ chance) while `patch_lines` pools to **0.628**, and patch scope beats the
+metric at **DeLong p=0.046** (bootstrap ΔAUC −0.089, 95% CI [−0.178, −0.003],
+excludes zero) — run `friction eval`. Patch size wins, significantly; per-instance
+prediction is *already solved* elsewhere at AUC 0.841 and is **not** claimed here.
+Neither result is dressed up.

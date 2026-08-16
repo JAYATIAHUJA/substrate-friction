@@ -151,23 +151,39 @@
 
   <h2>What we do <em>not</em> claim</h2>
 
+  <p><strong>The friction predictor does not work — and at <code>n=172</code> across 7 repos it now
+    fails <em>significantly</em>.</strong> Scored leave-one-repo-out (train on the other repos,
+    predict the held-out one), so the model can never memorise repo identity:</p>
+
+  <table>
+    <tr><th>Measure (same instances)</th><th>Value</th></tr>
+    <tr><td>Pooled held-out AUC, our features</td><td class="mono red">0.483 &nbsp;(&le; chance)</td></tr>
+    <tr><td>Pooled held-out AUC, <code>patch_lines</code></td><td class="mono">0.628</td></tr>
+    <tr><td>DeLong <code>fanin</code> vs <code>patch_lines</code></td><td class="mono">z = &minus;1.996, p = 0.046</td></tr>
+    <tr><td>Bootstrap &Delta;AUC (<code>fanin</code> &minus; <code>patch_lines</code>)</td><td class="mono">&minus;0.089, 95% CI [&minus;0.178, &minus;0.003]</td></tr>
+  </table>
+
   <div class="note warn">
-    <p style="margin:0 0 10px"><strong>The friction predictor does not work.</strong> Best feature
-      <code>test_to_fix_hops</code> reaches AUC <code>0.518</code> against an <code>f2p_count</code>
-      baseline of <code>0.653</code>; every bootstrap CI brackets zero; n=44 cannot resolve small
-      effects. That is the reported result.</p>
-    <p style="margin:0" class="small">Two earlier claims from this project are retracted: v1's AUC
-      0.565 (measured on a graph where 73.9% of resolved call edges were name-collision artifacts)
-      and v2's 0.631 (path-multiplicity only, and it lost to patch size). Per-instance agent-failure
-      prediction is <em>already solved</em> at AUC 0.841 (arXiv 2604.00594) — we do not claim it.</p>
+    <strong>A significant negative, not a shrug.</strong> Patch scope beats the directional metric
+    at <span class="red">p = 0.046</span> and the bootstrap CI excludes zero, below it. At n=44 the
+    difference could not be resolved — quadrupling the corpus crossed that line. Repo identity alone
+    predicts failure under two weaker cached systems (0.596, 0.613) but not the strong primary
+    (0.382) — the confound leave-one-repo-out removes, and why the in-sample <code>fanin</code>
+    0.567 collapses to <span class="red">0.483</span> out of sample. A general +0.05 effect would need
+    ~584 instances; we have 172 and claim no small effect.
   </div>
+
+  <p class="small muted">Two earlier claims from this project are retracted: v1's AUC 0.565
+    (measured on a graph where 73.9% of resolved call edges were name-collision artifacts) and v2's
+    0.631 (path-multiplicity only, and it lost to patch size). Per-instance agent-failure prediction
+    is <em>already solved</em> at AUC 0.841 (arXiv 2604.00594) — we do not claim it.</p>
 
   <h2>Read the measurements</h2>
   <p class="small">
     <a href="precision.md">precision.md</a> — the two-arm delta and the offender table &middot;
     <a href="connectivity.md">connectivity.md</a> — the direction finding &middot;
     <a href="latency.md">latency.md</a> — both queries on one graph &middot;
-    <a href="evaluation.md">evaluation.md</a> — the negative result and the retractions &middot;
+    <a href="evaluation.md">evaluation.md</a> — the significant negative (n=172, 7 repos, leave-one-repo-out) and the retractions &middot;
     <a href="graph-delta.md">graph-delta.md</a> — the raw join
   </p>
 

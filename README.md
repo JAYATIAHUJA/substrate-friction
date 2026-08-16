@@ -132,6 +132,26 @@ _Source: `docs/covers.md`, `src/friction/trace.py`, `src/friction/covers3.py`._
 
 ---
 
+## The restored graph schema — all 5 spec node types, all 7 spec edge types
+
+The build spec asked for **five node types** and **seven edge types**; the shipped graph had carried exactly two (`Function` nodes, `CALLS` edges — the emitter kept only those). Arm B now emits and round-trips all of them. Per-instance census, type-resolved arm B, `django__django-10097`:
+
+| Node type | count | | Edge type | count |
+|---|---:|---|---|---:|
+| `File` | 1,680 | | `CALLS` | 57,314 |
+| `Class` | 8,043 | | `DEFINED_IN` | 22,459 |
+| `Function` | 7,592 | | `HAS_METHOD` | 20,832 |
+| `Test` | 14,867 | | `INHERITS` | 6,639 |
+| `ConfigKey` | 145 | | `IMPORTS` | 4,999 |
+| | | | `READS_CONFIG` | 608 |
+| | | | `COVERS` | 36 |
+
+`COVERS` at **36** against **57,314** `CALLS` is a **sparse dynamic overlay**, not graph-wide coverage: it says "this test executed this function" for a small, honestly-counted set folded in by `friction.covers3`, and **must never be read as "the suite covers the code."** `READS_CONFIG` (~608 edges over ~145 distinct `ConfigKey`s per instance) is static and substantial, nowhere near zero. `Test` nodes outnumber `Function` nodes because django's suite is enormous — every `test_*` method under a `tests/` root is a `Test`.
+
+_Source: `docs/schema.md`, `src/friction/arms.py` (`emit_typed_arm`), `src/friction/loader.py`._
+
+---
+
 ## Finding 3 — the engine: bounded reachability stays cheap and always returns where path enumeration hits the 30 s wall
 
 The metric v2 asked for — the number of bounded paths between two node sets — is **#P-complete** (Valiant 1979). It is not slow; it is intractable, and on a dense django graph the engine's `algo.MSpaths` enumeration hit the hard **30,000 ms** timeout.
@@ -162,20 +182,28 @@ _Source: `docs/latency.md` (both queries measured on one django-scale graph; rep
 
 ---
 
-## The honest secondary result — the friction predictor is a scoped NO-GO
+## The honest secondary result — the friction predictor is a scoped, and now SIGNIFICANT, NO-GO
 
-We also asked whether directional structure features predict per-instance agent failure. **They do not.** Ground truth: `20241029_OpenHands-CodeAct-2.1-sonnet-20241022`, `n = 44`, class balance **21 failed / 23 resolved**. `failed=True` is the positive class.
+We also asked whether directional structure features predict per-instance agent failure. **They do not — and with the corpus quadrupled from one repo to seven, we can now say so at a significance threshold instead of shrugging.** Ground truth: `20241029_OpenHands-CodeAct-2.1-sonnet-20241022`, **`n = 172` across 7 repos** (each carrying both a fix-site and a test-target set), class balance **86 failed / 86 resolved**. `failed=True` is the positive class.
 
-| Our features | AUC | | Non-graph baselines | AUC |
-|---|---:|---|---|---:|
-| `test_to_fix_hops` (directed) | **0.518** | | `f2p_count` | **0.653** |
-| `fanin` | 0.509 | | `patch_lines` | 0.613 |
-| `undirected_hops` | 0.508 | | `statement_chars` | 0.590 |
-| `bwd_growth` | 0.500 | | `patch_files` | 0.573 |
-| `overlap_ratio` | 0.500 | | `patch_hunks` | 0.533 |
-| `fwd_growth` | 0.436 | | `statement_has_traceback` | 0.528 |
+The scoped question is now a **leave-one-repo-out** test — train on the other repos, predict the held-out one — so the model can never memorise repo identity (a known difficulty proxy).
 
-**The best feature (`test_to_fix_hops`, 0.518) does not beat the best baseline (`f2p_count`, 0.653), or even `patch_lines` (0.613).** And the sample cannot resolve the difference: every percentile-bootstrap 95% CI on `AUC(feature) − AUC(patch_lines)` brackets zero — e.g. `test_to_fix_hops` at `−0.095 [−0.299, +0.113]`. **Verdict: scoped NO-GO. `n=44` cannot resolve small effects.** The project leads with the substrate finding, not this predictor.
+| Measure (same instances) | Value |
+|---|---:|
+| Pooled held-out AUC, our features | **0.483** (at or below chance) |
+| Pooled held-out AUC, `patch_lines` | **0.628** |
+| Best feature in-sample (`fanin`) | 0.567 |
+| Best baseline in-sample (`patch_lines`) | 0.656 |
+| DeLong `AUC(fanin) − AUC(patch_lines)` | **z = −1.996, p = 0.046** |
+| Bootstrap ΔAUC (`fanin` − `patch_lines`) | **−0.089, 95% CI [−0.178, −0.003]** |
+
+Per-repo held-out AUC: django `0.494` | matplotlib `0.474` | pytest `0.444` | requests `0.688` | sphinx `0.551` | xarray `0.620` | sympy n/a (0 failures, single class).
+
+**This is a stronger result than the earlier inconclusive shrug, and we say so plainly.** At `n=44` the difference could not be resolved and every CI bracketed zero. At `n=172`, **patch scope significantly beats the directional metric** — DeLong `p = 0.046`, and the bootstrap 95% CI on the gap excludes zero, sitting below it. Out of sample the features collapse to at-or-below chance. Patch size wins; the structure loses, significantly.
+
+**The repo-identity confound, and why leave-one-repo-out is the honest split.** Repo identity alone predicts failure under the two weaker cached systems (AUC `0.596`, `0.613`) though **not** under the strong primary (`0.382`) — exactly the confound leave-one-repo-out neutralises, and precisely why the in-sample `0.567` collapses to `0.483` out of sample once repo identity cannot be memorised.
+
+**No small effect is claimed.** By the Hanley–McNeil variance, resolving the observed `0.089` gap needs ~310 instances; the general `+0.05` target needs ~584; we have 172. The gap **is** resolved (DeLong and bootstrap both reach the 5% threshold), but no smaller effect is distinguishable from noise here, and we claim none. The project leads with the substrate finding, not this predictor.
 
 ### Two retractions
 
@@ -200,7 +228,7 @@ _Source: `docs/evaluation.md`, `docs/evaluation-v1-retracted.md`. Reproduce: `uv
 - **The directional gap is real.** `fix → test` is `0/44`, `test → fix` is `24/44 (55%)`, undirected is `43/44 (98%)` — and the `55% → 98%` gap is fixture / `setUp` / `parametrize` / dispatch edges a static call graph structurally cannot see.
 - **Python only.** The type-resolved arm depends on `scip-python`/pyright.
 - **`maxLen 6`.** Reachability is bounded at 6 hops.
-- **`n = 44`, single repository (django only), underpowered.** A real feature-vs-baseline effect below ~0.15 AUC cannot be resolved on this sample, and every measurement is on one repository.
+- **Seven repos, unevenly weighted, and underpowered for a small general effect.** The fair test is `n = 172` across 7 repos (django 44, sphinx 44, matplotlib 33, xarray 21, pytest 19, requests 8, sympy 3), scored leave-one-repo-out so repo identity cannot be memorised. It is powered to resolve the observed ~0.09 patch-scope gap (`p = 0.046`) but **not** a general `+0.05` AUC effect (~584 instances needed). The big scientific repos (sympy, and the piloted scikit-learn / astropy) are under-represented because a full scip type-index of them runs ~12–18+ min/instance; sympy is capped at 3. Every instance is a SWE-bench Verified task.
 - **COVERS is partial.** The dynamic tracer maps only **27.6%** of executed `Test -> Function` edges into strict SCIP identity; the unmapped majority is the runtime-class-vs-definition-site mismatch (`type(self).__name__` is the runtime subclass, not the code object's definition site) plus `<module>` import bodies and staticmethods, which needs MRO-based definition-site resolution to close. Folding COVERS in moves the directed gate `11/18 -> 12/18` (`61% -> 67%`), a real but modest gain that does not rescue the predictor.
 - **Label contamination** (above): a non-trivial fraction of the `failed` labels are wrong.
 - **Arm B under-reports on untyped receivers** — the same property that makes precision a ceiling also means arm B is not ground truth, only a type-resolved reference.
