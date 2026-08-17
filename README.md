@@ -14,7 +14,12 @@ with respect to the graph while the graph is missing the edge that mattered.
 tests known to guard a fix does this graph let you reach?** The label is free —
 SWE-bench's `FAIL_TO_PASS` test *is* the test that guards the fix.
 On **172 labelled SWE-bench instances across 7 repositories** (study S1,
-`docs/studies.md`; emitted by `scripts/gate_corpus.py`):
+`docs/studies.md`; emitted by `scripts/gate_corpus.py`). One sentence so no
+two numbers in this README can read as a contradiction: **the type-resolved
+graph reaches the guarding test 0.545 of the time on django and 0.419 pooled
+across all 7 repos — the per-repo spread (1.00 down to 0.00) is itself the
+finding.** Django-only figures appear below wherever a section predates the
+corpus run; every figure names its scope.
 
 | Graph | Recall of the guarding test | Safe to skip? |
 |---|---|---|
@@ -26,6 +31,11 @@ Per-repo spread is enormous — django 24/44, xarray 19/21, **matplotlib 0/33 an
 pytest 0/19** (guarding tests in a *different graph component*: dynamic dispatch
 is invisible to both extractors), and two tiny repos at 1.0 (requests 8/8,
 sympy 3/3 — n too small to clear any bar). Full table: [`docs/gate.md`](docs/gate.md).
+
+The 7-repo corpus itself (~4.5 GB of graphs and SCIP indexes) cannot ship in a
+50 MB payload; what ships is its committed output — per-instance outcomes in
+`data/shipped/gate-results.json`, re-derivable by `friction verify` — with the
+cut documented in [`data/shipped/README.md`](data/shipped/README.md).
 
 Bar for skipping: 0.95 (a CLI flag). Nothing measured here comes close, and the
 ranking does not depend on where the bar sits. Full report: [`docs/gate.md`](docs/gate.md).
@@ -337,7 +347,7 @@ harder relation.
 
 - **The CI engine job is disclosed as failing.** The pinned engine bootstraps a
   fresh store cleanly on macOS/Docker Desktop but dies with `IsADirectory` on
-  the GitHub runner's filesystem. The badge covers the `tests` job (552 tests +
+  the GitHub runner's filesystem. The badge covers the `tests` job (the full pytest suite +
   the gate verdict reproduced in CI); the Bolt round trip
   (`scripts/hydra_proof.py` — write via the verified loader forms, walk via
   `CALLED_BY`) is proven against the running engine locally, and the CI job

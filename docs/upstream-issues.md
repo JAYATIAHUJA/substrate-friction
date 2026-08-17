@@ -1,7 +1,7 @@
 # Upstream issue drafts (file-ready)
 
 Contributions to `hydra-db/hydradb` in the same register as issue #81 and
-PR #82. Drafts only — filed when the user says go.
+PR #82. Both filed 2026-08-18: Draft A -> hydra-db/hydradb#101, Draft B -> hydra-db/hydradb#102.
 
 ## Draft A — fresh-store bootstrap fails on ext4/overlay CI runners
 

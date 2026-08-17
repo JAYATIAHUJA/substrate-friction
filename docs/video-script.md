@@ -26,11 +26,13 @@
 > test IS the test that guards the fix. If your selector doesn't return it, you
 > just skipped the one test that catches the bug.
 >
-> Name-matched graphs: fifty percent. Full pyright type resolution: fifty-five.
-> Even folding in dynamic execution traces: sixty-seven. The bar for safely
-> skipping is ninety-five. Nothing is close — and upgrading the extractor moved
-> paired recall by seven points, exactly the precision-recall separation ICSE
-> 2020 reported for Java.
+> Across one hundred seventy-two labelled instances in seven repositories:
+> name-matched graphs reach the guarding test thirty-one percent of the time.
+> Full pyright type resolution: forty-two percent. On django alone, fifty-five.
+> On matplotlib and pytest: zero — the guarding tests sit in a different
+> component of the graph. The bar for safely skipping is ninety-five percent.
+> Nothing is close, and upgrading the extractor moved paired recall by seven
+> points — the same precision-recall separation ICSE 2020 reported for Java.
 
 *Screen: the recall table from docs/gate.md.*
 

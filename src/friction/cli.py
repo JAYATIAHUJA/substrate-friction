@@ -970,9 +970,18 @@ def cmd_diff(args) -> int:
 
     index_path = _P("data/instances/arms/django__django-10097/index.scip")
     if not index_path.exists():
-        print("regeneration inputs absent (needs the local scip index); the "
-              "pinned result is committed in docs/engine-diff.md")
-        return 2
+        # A clean clone has no 67 MB scip index; print the pinned result the
+        # same way the other cache-backed commands print committed reports.
+        print(RULE)
+        print("  THE DISAGREEMENT SET, COMPUTED IN THE ENGINE (pinned run)")
+        print(RULE)
+        print("  This machine lacks the regeneration inputs (the per-instance")
+        print("  scip index, ~67 MB). The committed result of the live run —")
+        print("  reified anti-join, 4,381 CONFIRMED / 1,492 UNCONFIRMED, exact")
+        print("  parity with docs/graph-delta.md, 2.0 ms/edge — is in")
+        print("  docs/engine-diff.md, including the executed Cypher.")
+        print(RULE)
+        return 0
 
     print("building arm A (tree-sitter) …")
     arm_a, _ = build_arm_a(_P("data/repos/django"))

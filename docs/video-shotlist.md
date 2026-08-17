@@ -7,7 +7,7 @@ be re-recorded live or screen-shown from the capture. Narration text is in
 | # | 0:00–0:35 | Shot | Source |
 |---|---|---|---|
 | 1 | 0:00–0:35 | Problem: prune.png (21 edges, 9 red) | `docs/plots/prune.png` |
-| 2 | 0:35–1:15 | The corpus table: 172 instances, 0.419/0.314, RUN_FULL | `docs/gate.md` §corpus, or capture 01 |
+| 2 | 0:35–1:15 | The corpus table: 172 instances, 0.419/0.314, RUN_FULL | capture 06 (from `docs/gate.md`) |
 | 3 | 1:15–1:45 | Replay: graph-complete walk, 0/370 selected | capture 02 |
 | 4 | 1:45–2:10 | LIVE: engine loads graph, 2.6 ms walk, parity=True, engine proves the miss | capture 03 |
 | 5 | 2:10–2:25 | `friction diff --live` result: anti-join in-engine, 4381/1492 EXACT | `docs/engine-diff.md` table |
