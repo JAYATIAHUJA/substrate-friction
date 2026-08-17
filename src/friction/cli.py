@@ -940,14 +940,40 @@ def cmd_verify(args) -> int:
     else:
         failures.append("data/shipped/gate-results.json missing")
 
+    # Site numbers: every data-num span in docs/index.html must equal the
+    # value scripts/render_site.py derives from gate-results.json.
+    site = Path("docs/index.html")
+    if site.exists() and results.exists():
+        import re as _re
+        d = json.loads(results.read_text(encoding="utf-8"))
+        pool = d["summary"]["pooled"]
+        per = d["summary"]["per_repo"]
+        want = {
+            "pooled_b_recall": f"{pool['arm_b']['recall']:.3f}",
+            "pooled_a_recall": f"{pool['arm_a']['recall']:.3f}",
+            "pooled_b_ratio": f"{pool['arm_b']['hits']}/{pool['arm_b']['n']}",
+            "pooled_a_ratio": f"{pool['arm_a']['hits']}/{pool['arm_a']['n']}",
+            "django_b_ratio": f"{per['django']['arm_b']['hits']}/{per['django']['arm_b']['n']}",
+            "django_b_recall": f"{per['django']['arm_b']['hits']/per['django']['arm_b']['n']:.3f}",
+            "django_a_recall": f"{per['django']['arm_a']['hits']/per['django']['arm_a']['n']:.3f}",
+        }
+        found = _re.findall(r'data-num="([a-z_]+?)\d*">([^<]+)<',
+                            site.read_text(encoding="utf-8"))
+        if not found:
+            failures.append("docs/index.html has no data-num spans")
+        for key, value in found:
+            if key in want and value != want[key]:
+                failures.append(f"site {key}: page says {value!r}, "
+                                f"artifact says {want[key]!r}")
+
     if failures:
         print("VERIFY FAILED:")
         for f in failures:
             print(f"  - {f}")
         return 1
     print("VERIFY OK: shipped graphs re-audited (24/44, 15/30); corpus summary "
-          "re-derived from per-instance rows; docs/README quote the artifact "
-          "exactly.")
+          "re-derived from per-instance rows; docs/README/site quote the "
+          "artifact exactly.")
     return 0
 
 
