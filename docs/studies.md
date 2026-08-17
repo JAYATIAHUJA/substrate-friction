@@ -66,3 +66,19 @@ the named script, never by hand.
 - **Analysis:** recall(K) per arm; approximations (unweighted PageRank,
   induced-subgraph truncation) stated in the doc.
 - **Script:** `scripts/budget_curves.py` → `docs/budget-curves.md`.
+
+## S5 — The longitudinal ceiling (registered 2026-08-18, before any era was measured)
+
+- **Hypothesis:** the name-match precision ceiling (0.746 at the pinned 2019
+  commit) is not a constant of the technique but drifts as a codebase grows —
+  we expect it to **decline** with repo age/size as name collisions accumulate.
+- **Data:** django at release tags 1.11, 2.2, 3.2, 4.2, 5.0 (checked out from
+  the existing clone's history); both arms rebuilt per era with the same
+  extractors and the same identity join as `docs/graph-delta.md`.
+- **Metric:** per era — compared edges, confirmed, unconfirmed, precision
+  ceiling; plus arm sizes as covariates.
+- **Analysis:** the five-point trajectory, reported as-is. A join that fails
+  sanity (compared < 1,000 or zero intersection) is reported as `join_failed`
+  for that era, never patched into a number.
+- **Script:** `scripts/longitudinal.py` → `data/shipped/longitudinal.json` →
+  `docs/longitudinal.md`.
