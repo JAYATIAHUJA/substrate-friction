@@ -61,12 +61,17 @@
 <body>
 <div class="wrap">
 
-  <h1>What do name-matched code graphs cost?</h1>
+  <h1>Before your tool skips a test, measure the graph it trusted.</h1>
 
   <p class="lede">
-    Every AI coding agent that reads your repository builds a graph of it first. Aider's repo map,
-    RepoGraph and LocAgent all build that graph by matching identifier <em>names</em>. We built both
-    arms of the same Django commit — one name-matched, one type-resolved — and measured the gap.
+    Every AI coding agent that reads your repository builds a graph of it first — and tools skip
+    tests based on that graph. <strong><code>friction gate</code></strong> measures what nobody
+    checks: can the graph actually reach the tests that guard a change? On labelled SWE-bench
+    instances: name-matched graphs <strong>50%</strong>, full type resolution <strong>55%</strong>,
+    with dynamic execution traces folded in <strong>67%</strong>. The bar for safely skipping is
+    0.95. Verdict, every time: <strong>RUN_FULL</strong> — and a walk that is provably
+    <em>graph-complete</em> still selected 0 of 370 guarding tests on a real Django instance,
+    because an extractor cannot fail-closed on an edge it never knew existed.
   </p>
 
   <div class="cta">
