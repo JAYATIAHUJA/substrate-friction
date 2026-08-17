@@ -156,6 +156,53 @@ def main(argv=None) -> None:
             cells.append(f"{h}/{t} ({h / t:.2f})" if t else "—")
         L.append(f"| {repo} | {cells[0]} | {cells[1]} |")
 
+    # S1: the corpus-scale audit, read from the single-source-of-truth
+    # artifact emitted by scripts/gate_corpus.py. Never recomputed here.
+    results_path = Path("data/shipped/gate-results.json")
+    if results_path.exists():
+        import json as _json
+        S1 = _json.loads(results_path.read_text(encoding="utf-8"))
+        s = S1["summary"]
+        L += [
+            "",
+            "## The corpus headline: 7 repositories (study S1)",
+            "",
+            "Emitted by `scripts/gate_corpus.py` into "
+            "`data/shipped/gate-results.json` (per-instance outcomes "
+            "committed); pre-registered in `docs/studies.md` S1.",
+            "",
+            "| Repo | arm_a | arm_b |",
+            "|---|---|---|",
+        ]
+        for repo, arms in sorted(s["per_repo"].items()):
+            cells = []
+            for arm in ("arm_a", "arm_b"):
+                a = arms[arm]
+                cells.append(f"{a['hits']}/{a['n']} "
+                             f"({a['hits']/a['n']:.2f})" if a["n"] else "—")
+            L.append(f"| {repo} | {cells[0]} | {cells[1]} |")
+        pa, pb = s["pooled"]["arm_a"], s["pooled"]["arm_b"]
+        L += [
+            f"| **pooled** | **{pa['hits']}/{pa['n']} ({pa['recall']:.3f})** "
+            f"| **{pb['hits']}/{pb['n']} ({pb['recall']:.3f})** |",
+            "",
+            f"Pooled arm_b 95% Wilson interval: "
+            f"{pb['wilson95'][0]:.3f}-{pb['wilson95'][1]:.3f}. "
+            "The pre-registered hypothesis (S1) was that the corpus figure "
+            "would sit in the django band (~0.545); it is **lower** — "
+            "per-repo variance is far larger than hypothesized. Two small "
+            "repos reach 1.0 (requests 8/8, sympy 3/3 — n far too small to "
+            "clear a 0.95 bar with any confidence), while matplotlib and "
+            "pytest sit at **zero** on the type-resolved arm: their guarding "
+            "tests are not merely beyond k hops but in a different component "
+            "of the graph (verified on inspection — endpoints present, "
+            "mapped, and disconnected). Dynamic dispatch machinery "
+            "(`pyplot`, pytest plugin hooks) is invisible to both "
+            "extractors. Name matching occasionally reaches where type "
+            "resolution cannot (matplotlib arm_a 2/18 vs arm_b 0/33) — the "
+            "`cursor` counter-example generalises.",
+        ]
+
     L += [
         "",
         "The shipped payload carries the 50 django instances (see "

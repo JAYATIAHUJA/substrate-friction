@@ -13,12 +13,19 @@ with respect to the graph while the graph is missing the edge that mattered.
 `friction gate` measures the thing that is load-bearing: **what fraction of
 tests known to guard a fix does this graph let you reach?** The label is free —
 SWE-bench's `FAIL_TO_PASS` test *is* the test that guards the fix.
+On **172 labelled SWE-bench instances across 7 repositories** (study S1,
+`docs/studies.md`; emitted by `scripts/gate_corpus.py`):
 
 | Graph | Recall of the guarding test | Safe to skip? |
 |---|---|---|
-| Name-matched — the class Aider, RepoGraph and LocAgent build | **0.500** (15/30) | **No** |
-| Type-resolved — scip-python / pyright | **0.545** (24/44) | **No** |
-| Type-resolved + dynamic execution traces | **0.67** (12/18) | **No** |
+| Name-matched — the class Aider, RepoGraph and LocAgent build | **0.314** (37/118) | **No** |
+| Type-resolved — scip-python / pyright | **0.419** (72/172) | **No** |
+| Type-resolved + dynamic execution traces (django subset) | **0.67** (12/18) | **No** |
+
+Per-repo spread is enormous — django 24/44, xarray 19/21, **matplotlib 0/33 and
+pytest 0/19** (guarding tests in a *different graph component*: dynamic dispatch
+is invisible to both extractors), and two tiny repos at 1.0 (requests 8/8,
+sympy 3/3 — n too small to clear any bar). Full table: [`docs/gate.md`](docs/gate.md).
 
 Bar for skipping: 0.95 (a CLI flag). Nothing measured here comes close, and the
 ranking does not depend on where the bar sits. Full report: [`docs/gate.md`](docs/gate.md).

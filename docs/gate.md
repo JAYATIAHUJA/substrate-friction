@@ -61,6 +61,23 @@ PyCG (ICSE 2021) reports ~70% recall on real Python applications; Sui et al. rep
 |---|---|---|
 | django | 15/30 (0.50) | 24/44 (0.55) |
 
+## The corpus headline: 7 repositories (study S1)
+
+Emitted by `scripts/gate_corpus.py` into `data/shipped/gate-results.json` (per-instance outcomes committed); pre-registered in `docs/studies.md` S1.
+
+| Repo | arm_a | arm_b |
+|---|---|---|
+| django | 15/30 (0.50) | 24/44 (0.55) |
+| matplotlib | 2/18 (0.11) | 0/33 (0.00) |
+| pytest | 6/16 (0.38) | 0/19 (0.00) |
+| requests | 3/6 (0.50) | 8/8 (1.00) |
+| sphinx | 9/33 (0.27) | 18/44 (0.41) |
+| sympy | 0/1 (0.00) | 3/3 (1.00) |
+| xarray | 2/14 (0.14) | 19/21 (0.90) |
+| **pooled** | **37/118 (0.314)** | **72/172 (0.419)** |
+
+Pooled arm_b 95% Wilson interval: 0.347-0.493. The pre-registered hypothesis (S1) was that the corpus figure would sit in the django band (~0.545); it is **lower** — per-repo variance is far larger than hypothesized. Two small repos reach 1.0 (requests 8/8, sympy 3/3 — n far too small to clear a 0.95 bar with any confidence), while matplotlib and pytest sit at **zero** on the type-resolved arm: their guarding tests are not merely beyond k hops but in a different component of the graph (verified on inspection — endpoints present, mapped, and disconnected). Dynamic dispatch machinery (`pyplot`, pytest plugin hooks) is invisible to both extractors. Name matching occasionally reaches where type resolution cannot (matplotlib arm_a 2/18 vs arm_b 0/33) — the `cursor` counter-example generalises.
+
 The shipped payload carries the 50 django instances (see `data/shipped/README.md` for why the 7-repo corpus cannot ship); the 7-repo connectivity table is committed in `docs/connectivity.md`.
 
 ## Graph-complete is not program-complete
