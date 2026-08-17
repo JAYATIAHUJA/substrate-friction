@@ -99,7 +99,7 @@ def gate_explain(instance_ids: list[str], arm: str = "arm_b",
             "selected": len(result.selected),
             "graph_complete": result.graph_complete,
             "dropped_guarding_tests": missed[:50],
-            "cypher": (build_selection_cypher(int(fix[0]), "CALLS", k)
+            "cypher": (build_selection_cypher(int(fix[0]), "CALLED_BY", k)
                        if fix else None),
             "note": ("graph_complete=true means the walk exhausted every edge "
                      "this graph has. It does not mean the graph has every "

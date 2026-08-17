@@ -1,5 +1,45 @@
 # Substrate Friction
 
+[![HydraDB verify](https://github.com/areycruzer/substrate-friction/actions/workflows/hydra-verify.yml/badge.svg)](https://github.com/areycruzer/substrate-friction/actions/workflows/hydra-verify.yml)
+
+**Before your tool skips a test, measure the graph it trusted.**
+
+Graph-based test selection is a good idea: build a call graph, walk backwards
+from the change, run the tests it reaches, skip the rest. It is also unsafe in a
+way that is invisible from inside the tool — the walk can be provably complete
+with respect to the graph while the graph is missing the edge that mattered.
+**An extractor cannot fail-closed on an edge it never knew existed.**
+
+`friction gate` measures the thing that is load-bearing: **what fraction of
+tests known to guard a fix does this graph let you reach?** The label is free —
+SWE-bench's `FAIL_TO_PASS` test *is* the test that guards the fix.
+
+| Graph | Recall of the guarding test | Safe to skip? |
+|---|---|---|
+| Name-matched — the class Aider, RepoGraph and LocAgent build | **0.500** (15/30) | **No** |
+| Type-resolved — scip-python / pyright | **0.545** (24/44) | **No** |
+| Type-resolved + dynamic execution traces | **0.67** (12/18) | **No** |
+
+Bar for skipping: 0.95 (a CLI flag). Nothing measured here comes close, and the
+ranking does not depend on where the bar sits. Full report: [`docs/gate.md`](docs/gate.md).
+
+```bash
+friction gate --arm arm_b                      # exits 1: RUN_FULL
+friction gate --instance django__django-10097  # the replay: graph-complete walk,
+                                               # 0 of 370 guarding tests selected
+friction gate --repo <path> --changed <file>   # gate YOUR repo (prior stated as a prior)
+```
+
+**"Use a better extractor" is not a fix.** The full name-match → pyright
+type-resolution upgrade moves paired recall by **+0.071** (n=28, exact McNemar
+p=0.73). Sui et al. (ICSE 2020) reported the same separation for Java: precision
+and recall of a static analysis are separate concerns. The measurement behind
+that claim, and everything under it, is below.
+
+---
+
+## The substrate measurement behind the gate
+
 **Every AI coding agent that reads your repository builds a graph of it first — and Aider's repo map, RepoGraph, and LocAgent all build that graph by matching identifier _names_. We built both arms of the same django commit — one name-matched, one type-resolved — and measured what name matching costs: a precision ceiling of `0.746`, recall `0.352` of the true graph, Jaccard `0.3143`. A quarter of a name-matched graph's in-scope edges do not survive contact with type resolution, and they fail in a structured, nameable way.**
 
 ![Pruning wrong edges on django-11490](docs/plots/prune.png)
@@ -31,8 +71,35 @@ friction compare --issue django__django-10973   # arm A (name-matched) vs arm B 
 
 `setup.sh` runs from a clean clone with no manual steps (cold: about 77 s to a working gate — honest, not sub-60s). `friction compare`, `precision`, `connectivity`, `eval`, and `list` are cache-backed and read the committed `docs/` reports and `data/…/arms/` caches; they need no live engine. Only `friction check` and `friction serve` touch the running engine.
 
-**CLI:** `friction check / compare / precision / connectivity / eval / list / serve`.
-**API:** `GET /health /instances /check/{id} /compare/{id} /precision /connectivity`.
+**CLI:** `friction gate / check / compare / precision / connectivity / eval / list / serve`.
+**API:** `GET /health /gate /gate/{id} /instances /check/{id} /compare/{id} /precision /connectivity`.
+
+### Use it from a coding agent (MCP)
+
+The 2026 abstention literature (AgentAbstain, ReDAct) has agents defer on their
+own *internal* uncertainty — and finds that ability does not scale with model
+size. The gate supplies the missing **external** signal: a measured statement
+about the graph an agent's conclusion rests on. Any agent conclusion built on a
+graph traversal — affected tests, blast radius, related files — inherits that
+graph's recall.
+
+```json
+{"mcpServers": {"substrate-friction": {"command": "friction-mcp"}}}
+```
+
+Two task-shaped tools (several targets per call, one round trip):
+`gate_check` — is a skip defensible on this graph class? — and `gate_explain` —
+replay labelled instances, dropped guarding tests and the engine Cypher
+included. Runs against the open-source engine and the committed corpus; no
+hosted service, no credentials.
+
+### The pinned split
+
+`data/shipped/split.json` pins a dev/sealed partition by `sha256(instance_id)`,
+committed **before** the measurement. There are no fitted parameters in the
+selector, so this is not a train/test split — it tests whether choices made
+while looking at django (the hop bound, the identity join) hold on unseen
+instances. They do: dev 0.548 vs sealed 0.538 on arm B (`docs/gate.md`).
 
 ---
 
@@ -214,11 +281,45 @@ _Source: `docs/evaluation.md`, `docs/evaluation-v1-retracted.md`. Reproduce: `uv
 
 ---
 
+## What we tried first, and why it failed
+
+This started as a different product: predict from graph structure whether an AI
+agent would fail a task, and route the hard ones to a human. We built it and
+measured it. Pooled leave-one-repo-out AUC across 7 repos: **0.483** — at or
+below chance. The best structural feature lost to counting the lines in the
+patch. Two earlier figures were retracted for measurement defects; the full
+record is in `docs/evaluation.md` and stays in the repo rather than deleted.
+
+The target was wrong. A call graph carries no information about whether a
+language model will succeed. The gate asks the graph to report a property of
+*itself* — deterministic, and measurable. That failure is why the gate exists.
+
+---
+
 ## What we do not claim
 
 **We do not claim to predict per-instance agent failure. That problem is already solved.** Agent Psychometrics (arXiv 2604.00594) reports AUC **0.841** on SWE-bench Verified, **0.787 from the problem-statement text alone**, with a task-agnostic prior already at **0.718**. Our structure-only features are not competitive and are not meant to be — these rows are **published, not reproduced by us.** GRADE (arXiv 2606.22741) predicts failure from the _agent's run graph_ — adjacent to us, and it de-risks the mechanism while leaving the static repository call graph unclaimed. The contribution here is the **substrate measurement**, which nobody in this space had made against a type-resolved reference on real code.
 
 **Label contamination caps any AUC on this benchmark.** SWE-Bench+ (arXiv 2410.06992) measured **32.7%** solution leakage and **31%** weak tests; OpenAI reports **59.4%** of o3's failures on Verified were test flaws, not wrong patches. A ceiling below 1.0 is structural.
+
+---
+
+## Where this sits in the field
+
+The full placement — 25 years of safe regression-test selection (Rothermel &
+Harrold 1998; Legunsen FSE 2016), call-graph recall studies (Sui ICSE 2020;
+PyCG ICSE 2021; *Total Recall?* ISSTA 2024), the 2026 agent-abstention
+literature, and the category incumbent whose otherwise-exemplary benchmarks
+measure everything downstream of its graph and never the graph itself — is in
+[`docs/related-work.md`](docs/related-work.md). What was reused from whom, and
+what deliberately was not, is in [`docs/reuse-policy.md`](docs/reuse-policy.md).
+
+Two honest qualifications made there and repeated here: coverage-backed
+selection (which the strongest incumbent uses for its test recommendations) is
+genuinely stronger than static-graph selection, and our figures are **not
+comparable** to PyCG's 70% or Java's 0.884 — those measure single-edge
+presence; we measure bounded transitive reachability of a labelled pair, a
+harder relation.
 
 ---
 

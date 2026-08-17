@@ -866,7 +866,7 @@ def _gate_replay(args) -> int:
     if fix:
         print()
         print("  the query, in the engine:")
-        print(f"    {build_selection_cypher(int(fix[0]), 'CALLS', args.k)}")
+        print(f"    {build_selection_cypher(int(fix[0]), 'CALLED_BY', args.k)}")
     print(RULE)
     return 1 if missed else 0
 

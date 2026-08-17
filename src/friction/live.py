@@ -46,15 +46,23 @@ def _is_test(node: str) -> bool:
     return any(m in low for m in TEST_MARKERS)
 
 
-def _module_prefix(path: str) -> str:
-    """`src/friction/gate.py` -> the dotted qualname prefix a node would carry."""
+def _module_prefixes(path: str) -> tuple[str, ...]:
+    """`src/requests/sessions.py` -> dotted qualname prefixes a node may carry.
+
+    tree-sitter qualnames are dotted from the repo root and KEEP layout dirs
+    (`src.requests.sessions.Session::__init__`), so the full dotted path is the
+    primary candidate; the src/lib-stripped variant covers repos whose parse
+    root sat below the layout dir.
+    """
     p = path.replace("\\", "/")
     if p.endswith(".py"):
         p = p[:-3]
+    full = p.replace("/", ".")
+    out = [full]
     for strip in ("src/", "lib/"):
         if p.startswith(strip):
-            p = p[len(strip):]
-    return p.replace("/", ".")
+            out.append(p[len(strip):].replace("/", "."))
+    return tuple(out)
 
 
 def gate_repo(repo: Path, changed_files: list[str], arm: str = "arm_a",
@@ -80,12 +88,12 @@ def gate_repo(repo: Path, changed_files: list[str], arm: str = "arm_a",
         g.add_edge(nid(e.src), nid(e.dst))
 
     wanted = {c.replace("\\", "/") for c in changed_files}
-    prefixes = {w: _module_prefix(w) for w in wanted}
+    prefixes = {w: _module_prefixes(w) for w in wanted}
     changed_ids: set[int] = set()
     matched: set[str] = set()
     for name, node_id in index.items():
-        for w, pref in prefixes.items():
-            if pref and name.startswith(pref):
+        for w, prefs in prefixes.items():
+            if any(name.startswith(pref) for pref in prefs if pref):
                 changed_ids.add(node_id)
                 matched.add(w)
 
