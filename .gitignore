@@ -13,3 +13,4 @@ secrets/
 .superpowers/
 data/repos/
 src/friction/scip/_generated/
+data/.eras/
