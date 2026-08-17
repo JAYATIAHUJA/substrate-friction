@@ -1,0 +1,381 @@
+"""The gate: is it safe to skip tests based on this code graph?
+
+Every graph-based test selector answers "which tests does this change affect?"
+by walking the call graph backwards from the changed symbol — tests call code,
+so an affected test sits upstream. Whatever the walk does not reach gets skipped.
+
+That is only safe if the graph's *recall* of the test -> code relation is known.
+This module reproduces the selection (`select_tests`), measures its recall
+against labelled ground truth (`audit_recall`), turns the measurement into a
+decision (`gate`), and compares the two extraction arms on the same instances
+(`compare_arms`).
+
+The distinction the product rests on: a walk that exhausts its frontier is
+**graph-complete** — complete with respect to the edges the graph contains. It
+is not **program-complete**. An extractor cannot fail-closed on an edge it never
+knew existed, so graph-completeness is silent about missing edges. Only a recall
+measurement against labels can speak to those.
+
+Prior art, deliberately not re-claimed: safe regression test selection is
+Rothermel & Harrold (IEEE TSE 1998); static RTS unsafety is Legunsen et al.
+(FSE 2016); reflection as its cause is Shi et al. (OOPSLA 2019). What is new
+here is the domain (the graph class LLM coding agents build), the oracle
+(SWE-bench FAIL_TO_PASS rather than a dynamic RTS tool), and the link to agent
+abstention. See docs/related-work.md.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
+from typing import Iterable
+
+import networkx as nx
+
+from friction.connectivity import load_graph
+
+# The bar for "safe to skip". Chosen, not measured: dropping the guarding test
+# 1 run in 20 is already a poor trade against the minutes a full suite costs.
+# It is a parameter precisely because it is a judgement call — but no graph
+# class measured in this project comes close to it, so the verdict does not
+# turn on where exactly the bar sits.
+SAFE_SKIP_RECALL = 0.95
+
+DEFAULT_SPLIT_PATH = Path("data/shipped/split.json")
+
+
+def _check_bound(k: int) -> None:
+    if isinstance(k, bool) or not isinstance(k, int) or k < 1:
+        raise ValueError("k must be a positive integer (the bound is mandatory)")
+
+
+@dataclass(frozen=True)
+class SelectionResult:
+    """The tests a graph-based selector would run for one change.
+
+    `graph_complete` records whether the backwards walk exhausted its frontier
+    before hitting the bound `k`. True means no test reachable *in this graph*
+    was cut off by the bound. It says nothing about edges the graph is missing.
+    """
+
+    selected: frozenset[int]
+    k: int
+    graph_complete: bool
+
+
+def select_tests(g: nx.DiGraph, changed_ids: Iterable[int],
+                 candidate_test_ids: Iterable[int], k: int) -> SelectionResult:
+    """Tests within `k` reverse hops of any changed symbol.
+
+    Direction matters and is easy to get backwards: production code has no edge
+    to the test that guards it, so the walk runs along *predecessors*. Measured
+    on this corpus, the forward direction (fix -> test) connects 0/44 instances.
+    """
+    _check_bound(k)
+
+    changed = {int(c) for c in changed_ids}
+    candidates = {int(t) for t in candidate_test_ids}
+    if not changed or not candidates:
+        return SelectionResult(frozenset(), k, False)
+
+    selected = changed & candidates
+    frontier = {c for c in changed if c in g}
+    visited = set(frontier)
+
+    for _ in range(k):
+        nxt: set[int] = set()
+        for u in frontier:
+            nxt.update(g.predecessors(u))
+        nxt -= visited
+        if not nxt:
+            return SelectionResult(frozenset(selected), k, True)
+        selected |= nxt & candidates
+        visited |= nxt
+        frontier = nxt
+
+    return SelectionResult(frozenset(selected), k, False)
+
+
+@lru_cache(maxsize=8)
+def _load_split(split_path: str) -> dict:
+    p = Path(split_path)
+    if not p.exists():
+        return {}
+    return json.loads(p.read_text(encoding="utf-8")).get("assignments") or {}
+
+
+def split_of(instance_id: str,
+             split_path: Path = DEFAULT_SPLIT_PATH) -> str | None:
+    """Which half is this instance in? None when it is not in the pinned file.
+
+    Returning None rather than guessing matters: an instance added after the
+    split was pinned must not be silently folded into either half.
+    """
+    return _load_split(str(split_path)).get(instance_id)
+
+
+@dataclass(frozen=True)
+class RecallAudit:
+    """Measured recall of a graph-based selector against labelled instances.
+
+    The label is free: SWE-bench's FAIL_TO_PASS test *is* the test that guards
+    the fix. If the selector does not return it, a tool that skipped on this
+    graph would have dropped the one test that catches the bug.
+
+    This is the field's standard safety measure with a different oracle.
+    Legunsen et al. (FSE 2016) compute safety violation against Ekstazi, a
+    dynamic RTS tool. Using a human-curated label instead removes the
+    dependence on a second tool being right.
+    """
+
+    arm: str
+    k: int
+    n: int
+    hits: int
+    misses: tuple[str, ...]
+    per_repo: dict[str, tuple[int, int]]
+    split: str | None = field(default=None)
+
+    @property
+    def recall(self) -> float:
+        return self.hits / self.n if self.n else 0.0
+
+
+def _repo_of(instance_id: str) -> str:
+    return instance_id.split("__", 1)[0]
+
+
+def _iter_manifest(manifest_path: Path):
+    with Path(manifest_path).open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                yield json.loads(line)
+
+
+def _edges_path(arms_root: Path, instance_id: str, arm: str) -> Path | None:
+    """Resolve the edge file across the two on-disk layouts.
+
+    The working corpus keeps one file per arm
+    (``<id>/<arm>/edges.ndjson``); the shipped payload keeps one gzipped file
+    per instance with BOTH arms merged (``<id>/edges.ndjson.gz``). The merge is
+    safe to walk directly because the arms live in disjoint integer id bands,
+    so no edge can cross from one arm into the other.
+    """
+    per_arm = Path(arms_root) / instance_id / arm / "edges.ndjson"
+    if per_arm.exists():
+        return per_arm
+    merged = Path(arms_root) / instance_id / "edges.ndjson.gz"
+    if merged.exists():
+        return merged
+    return None
+
+
+def _load_edges(path: Path) -> nx.DiGraph:
+    """`connectivity.load_graph` plus transparent gzip support."""
+    if path.suffix != ".gz":
+        return load_graph(path)
+    import gzip
+    g = nx.DiGraph()
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                row = json.loads(line)
+                g.add_edge(int(row["src"]), int(row["dst"]))
+    return g
+
+
+def _instance_hit(record: dict, arms_root: Path, arm: str,
+                  k: int) -> bool | None:
+    """Did the selector return the guarding test for this instance?
+
+    Returns None when the instance is not measurable on this arm — either
+    endpoint set empty, or no graph on disk. Callers must exclude those from
+    `n` rather than score them, exactly as connectivity.measure_corpus does:
+    counting an unmeasurable instance either way would be a fabricated number.
+    """
+    entry = record.get(arm) or {}
+    fix = list(entry.get("fix_site_ids") or [])
+    tests = list(entry.get("test_target_ids") or [])
+    if not fix or not tests:
+        return None
+
+    edges = _edges_path(arms_root, record["instance_id"], arm)
+    if edges is None:
+        return None
+
+    return bool(select_tests(_load_edges(edges), fix, tests, k).selected)
+
+
+def audit_recall(manifest_path: Path, arms_root: Path, arm: str, k: int,
+                 split: str | None = None,
+                 split_path: Path = DEFAULT_SPLIT_PATH) -> RecallAudit:
+    """Run the selector over every labelled instance and count the misses.
+
+    `split` restricts to one half of the pinned split ("dev" or "sealed").
+    Instances absent from the split file are excluded when `split` is set,
+    never silently included.
+    """
+    n = hits = 0
+    misses: list[str] = []
+    per_repo: dict[str, list[int]] = {}
+
+    for record in _iter_manifest(manifest_path):
+        if split is not None:
+            if split_of(record["instance_id"], split_path) != split:
+                continue
+        hit = _instance_hit(record, Path(arms_root), arm, k)
+        if hit is None:
+            continue
+
+        n += 1
+        bucket = per_repo.setdefault(_repo_of(record["instance_id"]), [0, 0])
+        bucket[1] += 1
+        if hit:
+            hits += 1
+            bucket[0] += 1
+        else:
+            misses.append(record["instance_id"])
+
+    return RecallAudit(
+        arm=arm, k=k, n=n, hits=hits,
+        misses=tuple(misses),
+        per_repo={r: (h, t) for r, (h, t) in per_repo.items()},
+        split=split,
+    )
+
+
+@dataclass(frozen=True)
+class GateVerdict:
+    decision: str            # "SKIP_SAFE" | "RUN_FULL"
+    measured_recall: float
+    n: int
+    arm: str
+    k: int
+    threshold: float
+    reason: str
+
+
+def gate(audit: RecallAudit, threshold: float = SAFE_SKIP_RECALL) -> GateVerdict:
+    """Turn a measured recall into a decision about skipping tests."""
+    recall = audit.recall
+
+    if audit.n == 0:
+        return GateVerdict(
+            "RUN_FULL", 0.0, 0, audit.arm, audit.k, threshold,
+            "recall is unmeasured on this graph: with no labelled instances "
+            "there is no evidence that a skip would keep the guarding test, so "
+            "the only defensible decision is to run everything",
+        )
+
+    if recall >= threshold:
+        return GateVerdict(
+            "SKIP_SAFE", recall, audit.n, audit.arm, audit.k, threshold,
+            f"measured test->fix recall {recall:.3f} on n={audit.n} labelled "
+            f"instances meets the {threshold:.2f} bar",
+        )
+
+    dropped = round((1.0 - recall) * 100)
+    return GateVerdict(
+        "RUN_FULL", recall, audit.n, audit.arm, audit.k, threshold,
+        f"measured test->fix recall {recall:.3f} on n={audit.n} labelled "
+        f"instances is below the {threshold:.2f} bar: {dropped}% of tests known "
+        f"to guard their fix are not reachable in this graph, so a skip would "
+        f"silently drop them",
+    )
+
+
+@dataclass(frozen=True)
+class ArmComparison:
+    """Name-matched vs type-resolved recall, on the SAME instances.
+
+    Arm A is measurable on fewer instances than arm B, so an unpaired
+    comparison would compare different instance sets. Every count below is
+    restricted to instances measurable on both arms.
+
+    `p_value` is an exact McNemar test on the discordant cells (`a_only` vs
+    `b_only`) — the correct test for paired binary outcomes. It answers: given
+    the instances where the two arms disagree, is the split further from 50/50
+    than chance explains?
+    """
+
+    n_paired: int
+    a_hits: int
+    b_hits: int
+    both_hit: int
+    a_only: int
+    b_only: int
+    neither: int
+    p_value: float
+
+    @property
+    def a_recall(self) -> float:
+        return self.a_hits / self.n_paired if self.n_paired else 0.0
+
+    @property
+    def b_recall(self) -> float:
+        return self.b_hits / self.n_paired if self.n_paired else 0.0
+
+    @property
+    def recall_delta(self) -> float:
+        return self.b_recall - self.a_recall
+
+
+def _mcnemar_exact(a_only: int, b_only: int) -> float:
+    """Two-sided exact McNemar p-value from the discordant counts."""
+    discordant = a_only + b_only
+    if discordant == 0:
+        return 1.0
+    from scipy.stats import binomtest
+    return float(binomtest(b_only, discordant, 0.5).pvalue)
+
+
+def compare_arms(manifest_path: Path, arms_root: Path, k: int) -> ArmComparison:
+    """Paired arm comparison over instances measurable on both arms."""
+    arms_root = Path(arms_root)
+    both_hit = a_only = b_only = neither = 0
+
+    for record in _iter_manifest(manifest_path):
+        hit_a = _instance_hit(record, arms_root, "arm_a", k)
+        hit_b = _instance_hit(record, arms_root, "arm_b", k)
+        if hit_a is None or hit_b is None:
+            continue
+        if hit_a and hit_b:
+            both_hit += 1
+        elif hit_a:
+            a_only += 1
+        elif hit_b:
+            b_only += 1
+        else:
+            neither += 1
+
+    n_paired = both_hit + a_only + b_only + neither
+    return ArmComparison(
+        n_paired=n_paired,
+        a_hits=both_hit + a_only,
+        b_hits=both_hit + b_only,
+        both_hit=both_hit,
+        a_only=a_only,
+        b_only=b_only,
+        neither=neither,
+        p_value=_mcnemar_exact(a_only, b_only),
+    )
+
+
+def build_selection_cypher(node_id: int, rel_type: str, k: int) -> str:
+    """In-engine backwards selection from a changed symbol.
+
+    Mirrors `reach.build_reach_cypher` but returns the reached node ids rather
+    than a count, because the gate needs the *set* to intersect against the
+    candidate tests. `RETURN n.id` is deliberate: `count(n)` on a node is
+    rejected by the engine ("property values support integer, float, boolean,
+    and string literals"), and `n.id` is a verified-working projection.
+    """
+    if isinstance(node_id, bool) or not isinstance(node_id, int):
+        raise TypeError("node_id must be an integer graph id")
+    _check_bound(k)
+    return (f"MATCH (s {{id: {node_id}}})<-[:{rel_type}*1..{k}]-(n) "
+            f"RETURN n.id AS id")
