@@ -56,7 +56,7 @@ def test_gate_instance_mode_shows_the_dropped_test(capsys):
     out = capsys.readouterr().out
     assert demo_id in out
     assert "NOT SELECTED" in out
-    assert "<-[:CALLS*1..6]-" in out
+    assert "-[:CALLED_BY*1..6]->" in out
     assert code == 1
 
 
@@ -141,7 +141,7 @@ def test_gate_instance_endpoint_returns_the_dropped_tests_and_the_cypher():
     assert r.status_code == 200
     body = r.json()
     assert body["dropped_guarding_tests"]
-    assert "<-[:CALLS*1..6]-" in body["cypher"]
+    assert "-[:CALLED_BY*1..6]->" in body["cypher"]
 
 
 def test_gate_instance_endpoint_404s_on_an_unknown_instance():

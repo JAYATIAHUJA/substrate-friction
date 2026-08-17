@@ -25,5 +25,5 @@ def test_gate_explain_is_task_shaped_and_names_the_dropped_tests():
         instance_ids=[audit.misses[0], "nope__nope-0"]))
     assert len(payload) == 2
     assert payload[0]["dropped_guarding_tests"]
-    assert "<-[:CALLS*1..6]-" in payload[0]["cypher"]
+    assert "-[:CALLED_BY*1..6]->" in payload[0]["cypher"]
     assert payload[1]["error"] == "unknown instance"

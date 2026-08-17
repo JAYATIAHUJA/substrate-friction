@@ -274,13 +274,13 @@ def test_p_value_is_one_when_no_instance_discriminates(tmp_path):
 
 
 def test_selection_cypher_walks_predecessors():
-    q = build_selection_cypher(42, "CALLS", 6)
-    assert "<-[:CALLS*1..6]-" in q
+    q = build_selection_cypher(42, "CALLED_BY", 6)
+    assert "-[:CALLED_BY*1..6]->" in q
     assert "{id: 42}" in q
 
 
 def test_selection_cypher_never_counts_a_node():
-    q = build_selection_cypher(42, "CALLS", 6)
+    q = build_selection_cypher(42, "CALLED_BY", 6)
     assert "count(n)" not in q
     assert "DISTINCT" not in q
     assert "RETURN n.id" in q
@@ -288,9 +288,9 @@ def test_selection_cypher_never_counts_a_node():
 
 def test_selection_cypher_requires_a_bound_and_an_integer_id():
     with pytest.raises(ValueError):
-        build_selection_cypher(42, "CALLS", 0)
+        build_selection_cypher(42, "CALLED_BY", 0)
     with pytest.raises(TypeError):
-        build_selection_cypher("42", "CALLS", 6)
+        build_selection_cypher("42", "CALLED_BY", 6)
 
 
 # ── pinned split ─────────────────────────────────────────────────────────

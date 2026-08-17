@@ -365,17 +365,23 @@ def compare_arms(manifest_path: Path, arms_root: Path, k: int) -> ArmComparison:
     )
 
 
-def build_selection_cypher(node_id: int, rel_type: str, k: int) -> str:
+def build_selection_cypher(node_id: int, rel_type: str = "CALLED_BY",
+                           k: int = 6) -> str:
     """In-engine backwards selection from a changed symbol.
 
-    Mirrors `reach.build_reach_cypher` but returns the reached node ids rather
-    than a count, because the gate needs the *set* to intersect against the
-    candidate tests. `RETURN n.id` is deliberate: `count(n)` on a node is
-    rejected by the engine ("property values support integer, float, boolean,
-    and string literals"), and `n.id` is a verified-working projection.
+    Engine-verified form (2026-08-17, pinned commit): the incoming
+    variable-length pattern ``(s {id})<-[:CALLS*1..k]-(n)`` is REJECTED —
+    *"variable-length MATCH requires a fixed source id"* — the engine only
+    anchors a variable-length walk on the pattern's source side. So the
+    backwards walk is expressed as an **outward** walk over the reversed
+    relationship (``CALLED_BY``), which ingest materialises alongside ``CALLS``.
+
+    ``RETURN n.id`` is deliberate: ``count(n)`` on a node is rejected too
+    ("property values support integer, float, boolean, and string literals"),
+    and ``n.id`` is a verified-working projection.
     """
     if isinstance(node_id, bool) or not isinstance(node_id, int):
         raise TypeError("node_id must be an integer graph id")
     _check_bound(k)
-    return (f"MATCH (s {{id: {node_id}}})<-[:{rel_type}*1..{k}]-(n) "
+    return (f"MATCH (s {{id: {node_id}}})-[:{rel_type}*1..{k}]->(n) "
             f"RETURN n.id AS id")
