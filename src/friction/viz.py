@@ -360,6 +360,7 @@ _SHIPPED_ROOT = Path("data/shipped/arms")
 _MANIFEST = _ARMS_ROOT / "manifest.jsonl"
 _PATH_STATS = _ARMS_ROOT / "path_stats.json"
 _GRAPH_DELTA = Path("docs/graph-delta.md")
+_EVALUATION = Path("docs/evaluation.md")
 _VENDOR_CYTOSCAPE = Path("docs/vendor/cytoscape.min.js")
 
 # Half-open id band per arm, from the friction.arms constants. Used to split the
@@ -1075,6 +1076,240 @@ def render_density(rows, out_path: Path) -> Path:
     return out_path
 
 
+# --- FIGURE: day5-verdict.png — the thesis is dead --------------------------
+
+def _parse_verdict(path: Path = _EVALUATION) -> dict:
+    """Read the held-out verdict numbers straight from the committed evaluation.
+
+    Everything the figure draws is parsed VERBATIM from docs/evaluation.md — the
+    same discipline as :func:`_parse_offenders` reading docs/graph-delta.md — so
+    the figure can never drift from the reviewed report or silently re-round a
+    number. Returns a dict with:
+
+    * ``per_repo``    — ``[(repo, n, auc | None)]`` from the leave-one-repo-out
+      table, in document order; ``sympy``'s AUC is ``None`` (marked ``n/a`` in the
+      table, one class only).
+    * ``pooled_features`` / ``pooled_patch_lines`` — the pooled held-out AUCs.
+    * ``insample_feature`` / ``insample_baseline`` — ``(name, auc)`` for the
+      in-sample best feature and best baseline (kept distinct so the figure can
+      label them unmistakably as NOT held-out).
+    * ``delong_z`` / ``delong_p``, ``boot_dauc`` / ``boot_ci`` — the significance.
+    * ``n`` / ``failed`` / ``resolved`` — the class balance.
+
+    Any field the doc does not yield is returned as ``None`` (or an empty list),
+    never a fabricated value.
+    """
+    text = Path(path).read_text(encoding="utf-8")
+
+    # Leave-one-repo-out table: scope to that section, then read its rows.
+    per_repo: list[tuple[str, int, float | None]] = []
+    section = ""
+    grab = False
+    for line in text.splitlines():
+        if line.startswith("## Leave-one-repo-out"):
+            grab = True
+            continue
+        if grab and line.startswith("## "):
+            break
+        if grab:
+            section += line + "\n"
+    row = re.compile(r"^\|\s*([a-z][a-z0-9_]*)\s*\|\s*(\d+)\s*\|\s*(n/a|[\d.]+)\s*\|",
+                     re.MULTILINE)
+    for m in row.finditer(section):
+        auc = None if m.group(3) == "n/a" else float(m.group(3))
+        per_repo.append((m.group(1), int(m.group(2)), auc))
+
+    def _f(pattern: str) -> float | None:
+        m = re.search(pattern, text)
+        return float(m.group(1)) if m else None
+
+    pooled_features = _f(r"Pooled held-out AUC \(features\):\s*([\d.]+)")
+    pooled_patch = _f(r"alone pooled \*\*([\d.]+)\*\*")
+
+    def _named(pattern: str) -> tuple[str, float] | None:
+        m = re.search(pattern, text)
+        return (m.group(1), float(m.group(2))) if m else None
+
+    insample_feature = _named(r"\*\*Best feature:\*\*\s*`([^`]+)`\s*at\s*(\d+\.\d+)")
+    insample_baseline = _named(r"\*\*Best baseline:\*\*\s*`([^`]+)`\s*at\s*(\d+\.\d+)")
+
+    delong = re.search(r"z = (-?[\d.]+),\s*p = ([\d.]+)", text)
+    boot = re.search(r"\|\s*`fanin`\s*\|\s*(-?[\d.]+)\s*\|\s*(\[[^\]]+\])\s*\|", text)
+    balance = re.search(r"n=(\d+),\s*failed=(\d+),\s*resolved=(\d+)", text)
+
+    return {
+        "per_repo": per_repo,
+        "pooled_features": pooled_features,
+        "pooled_patch_lines": pooled_patch,
+        "insample_feature": insample_feature,
+        "insample_baseline": insample_baseline,
+        "delong_z": float(delong.group(1)) if delong else None,
+        "delong_p": float(delong.group(2)) if delong else None,
+        "boot_dauc": float(boot.group(1)) if boot else None,
+        "boot_ci": boot.group(2) if boot else None,
+        "n": int(balance.group(1)) if balance else None,
+        "failed": int(balance.group(2)) if balance else None,
+        "resolved": int(balance.group(3)) if balance else None,
+    }
+
+
+# Dark social-card palette. Red = the dead metric (at/below chance); blue = the
+# baseline that beat it; grey = the chance reference. Chosen honestly: the
+# failing result is not dressed up, and the winning baseline is not a triumph.
+_V_BG = "#0d1117"
+_V_INK = "#e6edf5"
+_V_MUTED = "#8b949e"
+_V_DIM = "#586069"
+_V_GRID = "#21262d"
+_V_CHANCE = "#768390"
+_V_RED = "#f85149"
+_V_BLUE = "#58a6ff"
+_V_SLATE = "#7d8590"
+
+
+def render_verdict(data: dict, out_path: Path) -> Path:
+    """The build-in-public obituary figure: docs/plots/day5-verdict.png.
+
+    One wide dark card that reads at a glance and needs no caption:
+
+    * every repo's leave-one-repo-out held-out AUC as a dot, sized by that repo's
+      n (so the small-n repos that scatter high are visibly the least trustworthy),
+      most of them landing on or below the 0.5 chance line;
+    * the pooled contrast drawn as two full-height rules — the friction features
+      at 0.483 (red, sitting on chance) and ``patch_lines`` alone at 0.628 (blue);
+    * the chance line at 0.5, dashed and labelled.
+
+    ``sympy`` is shown as an explicit ``n/a`` row (0 failures, single class), never
+    dropped. In-sample numbers, if present, are printed in the footer LABELLED as
+    not-held-out, so they can never be mistaken for the held-out result. Empty or
+    partial input renders a card rather than raising.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    per_repo = list(data.get("per_repo") or [])
+    pooled_f = data.get("pooled_features")
+    pooled_p = data.get("pooled_patch_lines")
+
+    valued = [(r, n, a) for (r, n, a) in per_repo if a is not None]
+    na = [(r, n) for (r, n, a) in per_repo if a is None]
+    valued.sort(key=lambda t: t[2], reverse=True)   # best AUC on top
+
+    # Combined display order: valued repos (desc), then the n/a rows at the bottom.
+    rows = valued + [(r, n, None) for (r, n) in na]
+    n_rows = len(rows)
+    ypos = list(range(n_rows))[::-1]                 # first row highest → at top
+
+    fig = plt.figure(figsize=(12, 6.75), dpi=200)
+    fig.patch.set_facecolor(_V_BG)
+    ax = fig.add_axes([0.15, 0.17, 0.81, 0.52])
+    ax.set_facecolor(_V_BG)
+
+    x_lo, x_hi = 0.40, 0.74
+    ax.set_xlim(x_lo, x_hi)
+    ax.set_ylim(-0.9, n_rows - 0.1 + 0.9)
+
+    ax.grid(axis="x", color=_V_GRID, lw=0.9, alpha=0.7, zorder=0)
+
+    # Chance + pooled reference rules.
+    ax.axvline(0.5, color=_V_CHANCE, ls=(0, (5, 4)), lw=1.7, zorder=1)
+    mid_y = (n_rows - 1) / 2.0
+    if pooled_f is not None:
+        ax.axvline(pooled_f, color=_V_RED, lw=2.8, zorder=1)
+        ax.text(pooled_f - 0.006, mid_y,
+                f"friction features\npooled held-out {pooled_f:.3f}",
+                rotation=90, va="center", ha="right",
+                color=_V_RED, fontsize=11.5, weight="bold", linespacing=1.15)
+    if pooled_p is not None:
+        ax.axvline(pooled_p, color=_V_BLUE, lw=2.8, zorder=1)
+        ax.text(pooled_p + 0.006, mid_y,
+                f"patch_lines alone\n{pooled_p:.3f}",
+                rotation=90, va="center", ha="left",
+                color=_V_BLUE, fontsize=11.5, weight="bold", linespacing=1.15)
+    ax.text(0.5, n_rows - 0.1 + 0.55, "chance 0.5", ha="center", va="bottom",
+            color=_V_CHANCE, fontsize=11, weight="bold")
+
+    ylabels: list[str] = []
+    ycolors: list[str] = []
+    for (repo, n, auc), y in zip(rows, ypos):
+        ylabels.append(f"{repo}\nn={n}")
+        if auc is None:
+            ycolors.append(_V_DIM)
+            ax.text(0.5, y, "n/a  ·  0 failures (single class)",
+                    ha="center", va="center", color=_V_DIM, fontsize=10.5,
+                    style="italic", zorder=3)
+            continue
+        colour = _V_RED if auc <= 0.5 else _V_SLATE
+        ycolors.append(colour)
+        size = 60 + n * 9.0                          # dot area ∝ repo test-set n
+        ax.scatter([auc], [y], s=size, color=colour, edgecolors=_V_BG,
+                   linewidths=1.2, zorder=3)
+        # Value label placed on the open side so it never sits under the dot.
+        off = 0.009 if auc >= 0.5 else -0.009
+        ax.text(auc + off, y, f"{auc:.3f}",
+                ha="left" if auc >= 0.5 else "right", va="center",
+                color=colour, fontsize=12, weight="bold", zorder=4)
+
+    ax.set_yticks(ypos)
+    ax.set_yticklabels(ylabels, fontsize=11.5)
+    for tick, colour in zip(ax.get_yticklabels(), ycolors):
+        tick.set_color(colour)
+
+    ax.set_xticks([0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70])
+    ax.tick_params(axis="x", colors=_V_MUTED, labelsize=11)
+    ax.tick_params(axis="y", length=0)
+    ax.set_xlabel("leave-one-repo-out held-out AUC   ·   dot area ∝ repo n",
+                  color=_V_INK, fontsize=12.5)
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+    ax.spines["bottom"].set_color(_V_MUTED)
+
+    # Headline + subtitle.
+    fig.text(0.5, 0.935, "The thesis is dead — its own evaluation killed it",
+             ha="center", va="center", color=_V_INK, fontsize=27, weight="bold")
+    n = data.get("n")
+    failed = data.get("failed")
+    resolved = data.get("resolved")
+    bal = (f"n={n}, {failed} failed / {resolved} resolved"
+           if None not in (n, failed, resolved) else "")
+    sub = ("Across 7 repos, held out one at a time, our graph-structure "
+           "“friction” features land on the coin-flip line —")
+    sub2 = "and below plain patch size. " + (bal + "." if bal else "")
+    fig.text(0.5, 0.845, sub, ha="center", va="center",
+             color=_V_MUTED, fontsize=13.5)
+    fig.text(0.5, 0.805, sub2, ha="center", va="center",
+             color=_V_MUTED, fontsize=13.5)
+
+    # Footer: significance, then in-sample numbers LABELLED as not held-out.
+    parts = []
+    if pooled_f is not None and pooled_p is not None:
+        parts.append(f"held-out: features {pooled_f:.3f} vs patch_lines {pooled_p:.3f}")
+    if data.get("delong_z") is not None and data.get("delong_p") is not None:
+        parts.append(f"DeLong z={data['delong_z']:.3f}, p={data['delong_p']:.3f}")
+    if data.get("boot_dauc") is not None and data.get("boot_ci"):
+        parts.append(f"bootstrap ΔAUC {data['boot_dauc']:+.3f}, 95% CI {data['boot_ci']}")
+    if parts:
+        fig.text(0.5, 0.075, "   ·   ".join(parts), ha="center", va="center",
+                 color=_V_MUTED, fontsize=10.8)
+
+    feat = data.get("insample_feature")
+    base = data.get("insample_baseline")
+    if feat and base:
+        fig.text(0.5, 0.035,
+                 f"in-sample, same instances (NOT held-out): best feature "
+                 f"{feat[0]} {feat[1]:.3f} vs {base[0]} {base[1]:.3f}",
+                 ha="center", va="center", color=_V_DIM, fontsize=10,
+                 style="italic")
+
+    fig.savefig(out_path, facecolor=_V_BG, dpi=200)
+    plt.close(fig)
+    return out_path
+
+
 # ==========================================================================
 # demo.html — the self-contained interactive money shot (Cytoscape.js)
 # ==========================================================================
@@ -1432,6 +1667,16 @@ def generate_density_figure(out_path: Path = _PLOTS / "density.png") -> Path:
     return render_density(density_rows(), out_path)
 
 
+def generate_verdict_figure(out_path: Path = _PLOTS / "day5-verdict.png") -> Path:
+    """docs/plots/day5-verdict.png — the held-out verdict, parsed from the eval.
+
+    Reads every number from the committed docs/evaluation.md (see
+    :func:`_parse_verdict`); nothing is hand-entered here. Regenerates from a clean
+    clone.
+    """
+    return render_verdict(_parse_verdict(), out_path)
+
+
 def generate_demo_html(out_path: Path = _DEMO_HTML) -> Path:
     return render_demo_html(build_demo_graph(), out_path)
 
@@ -1458,6 +1703,7 @@ def generate_everything() -> list[Path]:
         generate_arms_figure(),
         generate_offenders_figure(),
         generate_density_figure(),
+        generate_verdict_figure(),
         generate_demo_html(),
     ]
 

@@ -732,6 +732,190 @@ def _print_doc(path: Path, missing_hint: str) -> int:
     return 0
 
 
+def cmd_gate(args) -> int:
+    """Return 0 when a skip is defensible, 1 when it is not.
+
+    The non-zero exit is the product: drop `friction gate` into CI and a graph
+    whose recall has not been established fails the build rather than silently
+    licensing a skip.
+    """
+    from friction.gate import SAFE_SKIP_RECALL, audit_recall
+    from friction.gate import gate as run_gate
+
+    if args.repo:
+        return _gate_live(args)
+    if args.instance:
+        return _gate_replay(args)
+
+    manifest = MANIFEST_PATH
+    arms_root = manifest.parent
+    threshold = args.threshold if args.threshold is not None else SAFE_SKIP_RECALL
+
+    audit = audit_recall(manifest, arms_root, args.arm, args.k, split=args.split)
+    verdict = run_gate(audit, threshold)
+
+    advice = (
+        "run the full test suite: this graph's recall is below the bar, so a "
+        "selected subset would omit tests that guard the change"
+        if verdict.decision == "RUN_FULL" else
+        "a selected subset is defensible on this graph at this bar")
+
+    if args.json:
+        print(json.dumps({
+            "decision": verdict.decision,
+            "measured_recall": round(verdict.measured_recall, 4),
+            "hits": audit.hits,
+            "n": verdict.n,
+            "arm": verdict.arm,
+            "k": verdict.k,
+            "split": audit.split,
+            "threshold": verdict.threshold,
+            "reason": verdict.reason,
+            "advice": advice,
+            "per_repo": {r: {"hits": h, "n": t}
+                         for r, (h, t) in audit.per_repo.items()},
+            "misses": list(audit.misses),
+        }, indent=2))
+        return 0 if verdict.decision == "SKIP_SAFE" else 1
+
+    mark = "PASS" if verdict.decision == "SKIP_SAFE" else "FAIL"
+    print(RULE)
+    print(f"[{mark}]  {verdict.decision}      arm={verdict.arm}  k={verdict.k}"
+          + (f"  split={audit.split}" if audit.split else ""))
+    print(RULE)
+    print(f"  measured test->fix recall : {verdict.measured_recall:.3f}  "
+          f"({audit.hits}/{audit.n} labelled instances)")
+    print(f"  bar for skipping          : {verdict.threshold:.2f}")
+    print()
+    print(f"  {verdict.reason}")
+    if audit.per_repo:
+        print("\n  per repo:")
+        for repo in sorted(audit.per_repo):
+            h, t = audit.per_repo[repo]
+            print(f"    {repo:<14} {h:>3}/{t:<3}  {h / t:.2f}  {_bar(h / t, 1.0, 18)}")
+    if audit.misses:
+        print(f"\n  {len(audit.misses)} instances where the guarding test is "
+              f"unreachable. First 5:")
+        for m in audit.misses[:5]:
+            print(f"    {m}")
+        print(f"\n  replay one:  friction gate --instance {audit.misses[0]}")
+    print(RULE)
+    return 0 if verdict.decision == "SKIP_SAFE" else 1
+
+
+def _gate_replay(args) -> int:
+    """Replay one instance: the selection, the label, and the gap between them."""
+    from friction.gate import (_edges_path, _load_edges, build_selection_cypher,
+                               select_tests)
+
+    manifest = MANIFEST_PATH
+    record = None
+    with manifest.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            if row["instance_id"] == args.instance:
+                record = row
+                break
+    if record is None:
+        print(f"instance {args.instance} is not in {manifest}")
+        return 2
+
+    entry = record.get(args.arm) or {}
+    fix = list(entry.get("fix_site_ids") or [])
+    tests = list(entry.get("test_target_ids") or [])
+    edges = _edges_path(manifest.parent, args.instance, args.arm)
+    if edges is None:
+        print(f"no {args.arm} graph on disk for {args.instance}")
+        return 2
+
+    g = _load_edges(edges)
+    result = select_tests(g, fix, tests, args.k)
+    missed = sorted(set(int(t) for t in tests) - result.selected)
+
+    print(RULE)
+    print(f"  {args.instance}")
+    print(RULE)
+    print(f"  arm          : {args.arm} "
+          f"({'type-resolved' if args.arm == 'arm_b' else 'name-matched'})")
+    print(f"  base commit  : {str(record.get('base_commit', 'unknown'))[:12]}")
+    print(f"  graph        : {g.number_of_nodes():,} nodes, "
+          f"{g.number_of_edges():,} edges")
+    print()
+    print(f"  changed symbols (fix sites)       : {len(fix)}")
+    print(f"  tests that guard the fix (label)  : {len(tests)}"
+          f"   <- SWE-bench FAIL_TO_PASS")
+    print(f"  tests the selector returns        : {len(result.selected)}")
+    print(f"  walk was graph-complete           : {result.graph_complete}")
+    print()
+    if missed:
+        print(f"  NOT SELECTED — {len(missed)} guarding test node(s) are "
+              f"unreachable")
+        print(f"  from the change within {args.k} hops. A tool that skipped on")
+        print(f"  this graph would not have run them.")
+        print(f"    node ids: {missed[:8]}{' …' if len(missed) > 8 else ''}")
+    else:
+        print("  All guarding tests were selected on this instance.")
+    print()
+    print("  The walk exhausted its frontier: it is complete with respect to the")
+    print("  edges this graph has. The guarding test is missing because the edge")
+    print("  connecting it was never extracted — and no completeness check on a")
+    print("  graph can see an edge that is not in it.")
+    if fix:
+        print()
+        print("  the query, in the engine:")
+        print(f"    {build_selection_cypher(int(fix[0]), 'CALLS', args.k)}")
+    print(RULE)
+    return 1 if missed else 0
+
+
+def _gate_live(args) -> int:
+    """Gate a real repository: build its graph, select, decide."""
+    from friction.live import gate_repo
+
+    live = gate_repo(args.repo, list(args.changed), args.arm, args.k)
+    v = live.verdict
+
+    if args.json:
+        print(json.dumps({
+            "repo": str(live.repo), "arm": live.arm, "k": live.k,
+            "decision": v.decision,
+            "graph_nodes": live.graph_nodes, "graph_edges": live.graph_edges,
+            "changed_symbols": live.changed_symbols,
+            "total_tests": live.total_tests,
+            "selected_tests": list(live.selected_tests),
+            "graph_complete": live.graph_complete,
+            "unmatched_changed": list(live.unmatched_changed),
+            "prior_note": live.prior_note,
+        }, indent=2))
+        return 0 if v.decision == "SKIP_SAFE" else 1
+
+    print(RULE)
+    mark = "PASS" if v.decision == "SKIP_SAFE" else "FAIL"
+    print(f"[{mark}]  {v.decision}      {live.repo.name}  arm={live.arm}  k={live.k}")
+    print(RULE)
+    print(f"  graph            : {live.graph_nodes:,} nodes, "
+          f"{live.graph_edges:,} edges")
+    print(f"  changed symbols  : {live.changed_symbols:,}")
+    print(f"  tests in repo    : {live.total_tests:,}")
+    print(f"  tests selected   : {len(live.selected_tests):,}")
+    print(f"  graph-complete   : {live.graph_complete}")
+    if live.unmatched_changed:
+        print(f"  UNMATCHED paths  : {', '.join(live.unmatched_changed)}")
+    print()
+    print(f"  {v.reason}")
+    print()
+    print(f"  {live.prior_note}")
+    if live.selected_tests:
+        print("\n  selected (first 10):")
+        for t in live.selected_tests[:10]:
+            print(f"    {t}")
+    print(RULE)
+    return 0 if v.decision == "SKIP_SAFE" else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="friction",
@@ -763,6 +947,26 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("connectivity", help="print docs/connectivity.md — the direction table")
     sub.add_parser("delta", help="print the precision ceiling and offender table")
     sub.add_parser("eval", help="print the scoped NO-GO evaluation and retraction")
+
+    gate_cmd = sub.add_parser(
+        "gate",
+        help="is it safe to skip tests based on this graph? (measured, not assumed)")
+    gate_cmd.add_argument("--arm", default="arm_b", choices=["arm_a", "arm_b"],
+                          help="arm_a = name-matched, arm_b = type-resolved")
+    gate_cmd.add_argument("--k", type=int, default=6,
+                          help="hop bound (mandatory; default 6)")
+    gate_cmd.add_argument("--threshold", type=float, default=None,
+                          help="recall bar for a skip (default 0.95)")
+    gate_cmd.add_argument("--instance", default=None,
+                          help="replay one instance instead of the corpus")
+    gate_cmd.add_argument("--split", default=None, choices=["dev", "sealed"],
+                          help="restrict to one half of the pinned split")
+    gate_cmd.add_argument("--repo", type=Path, default=None,
+                          help="gate a real repository instead of the corpus")
+    gate_cmd.add_argument("--changed", nargs="*", default=[],
+                          help="changed file paths, relative to --repo")
+    gate_cmd.add_argument("--json", action="store_true",
+                          help="machine-readable, for CI and agents")
 
     srv_cmd = sub.add_parser("serve", help="run the FastAPI service with uvicorn")
     srv_cmd.add_argument("--host", default="127.0.0.1")
@@ -843,6 +1047,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "eval":
         return _print_doc(EVAL_PATH,
                           "no evaluation report yet — run `uv run python -m friction.harness`.")
+
+    if args.command == "gate":
+        return cmd_gate(args)
 
     if args.command == "serve":
         from friction.api import serve

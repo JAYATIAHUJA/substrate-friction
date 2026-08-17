@@ -116,6 +116,78 @@ def create_app(live: bool = True) -> FastAPI:
             return {"engine_reachable": False, "transport": None,
                     "pinned_commit": commit, "detail": str(exc)[:200]}
 
+    @app.get("/gate")
+    def gate_corpus(arm: str = "arm_b", k: int = 6,
+                    threshold: float | None = None) -> dict:
+        """May a tool skip tests on this graph class? Measured, not assumed."""
+        from friction.gate import SAFE_SKIP_RECALL, audit_recall
+        from friction.gate import gate as run_gate
+
+        if arm not in {"arm_a", "arm_b"}:
+            raise HTTPException(status_code=400,
+                                detail="arm must be arm_a or arm_b")
+
+        manifest = cli.MANIFEST_PATH
+        audit = audit_recall(manifest, manifest.parent, arm, k)
+        verdict = run_gate(
+            audit, threshold if threshold is not None else SAFE_SKIP_RECALL)
+        return {
+            "decision": verdict.decision,
+            "measured_recall": round(verdict.measured_recall, 4),
+            "hits": audit.hits,
+            "n": verdict.n,
+            "arm": arm,
+            "k": k,
+            "threshold": verdict.threshold,
+            "reason": verdict.reason,
+            "per_repo": {r: {"hits": h, "n": t}
+                         for r, (h, t) in audit.per_repo.items()},
+            "miss_count": len(audit.misses),
+        }
+
+    @app.get("/gate/{instance_id}")
+    def gate_instance(instance_id: str, arm: str = "arm_b", k: int = 6) -> dict:
+        """Replay one instance: selected tests vs the tests that guard the fix."""
+        from friction.gate import (_edges_path, _iter_manifest, _load_edges,
+                                   build_selection_cypher, select_tests)
+
+        if arm not in {"arm_a", "arm_b"}:
+            raise HTTPException(status_code=400,
+                                detail="arm must be arm_a or arm_b")
+
+        manifest = cli.MANIFEST_PATH
+        record = next((r for r in _iter_manifest(manifest)
+                       if r["instance_id"] == instance_id), None)
+        if record is None:
+            raise HTTPException(status_code=404,
+                                detail=f"unknown instance {instance_id}")
+
+        entry = record.get(arm) or {}
+        fix = list(entry.get("fix_site_ids") or [])
+        tests = list(entry.get("test_target_ids") or [])
+        edges = _edges_path(manifest.parent, instance_id, arm)
+        if edges is None:
+            raise HTTPException(status_code=404,
+                                detail=f"no {arm} graph for {instance_id}")
+
+        result = select_tests(_load_edges(edges), fix, tests, k)
+        missed = sorted(set(int(t) for t in tests) - result.selected)
+        return {
+            "instance_id": instance_id,
+            "arm": arm,
+            "k": k,
+            "fix_sites": len(fix),
+            "guarding_tests": len(tests),
+            "selected": len(result.selected),
+            "graph_complete": result.graph_complete,
+            "dropped_guarding_tests": missed,
+            "cypher": (build_selection_cypher(int(fix[0]), "CALLS", k)
+                       if fix else None),
+            "note": ("graph_complete=true means the walk exhausted every edge "
+                     "this graph has. It does not mean the graph has every "
+                     "edge."),
+        }
+
     @app.get("/instances")
     def instances() -> dict:
         rows = cli._list_rows()
