@@ -28,6 +28,9 @@ friction gate --arm arm_b                      # exits 1: RUN_FULL
 friction gate --instance django__django-10097  # the replay: graph-complete walk,
                                                # 0 of 370 guarding tests selected
 friction gate --repo <path> --changed <file>   # gate YOUR repo (prior stated as a prior)
+friction gate --instance ... --live            # the same replay executed IN the engine:
+                                               # graph loaded live, walk in ~1-3 ms,
+                                               # engine/offline parity asserted
 ```
 
 **"Use a better extractor" is not a fix.** The full name-match → pyright

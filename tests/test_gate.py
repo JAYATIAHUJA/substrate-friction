@@ -333,3 +333,33 @@ def test_audit_can_be_restricted_to_one_half(tmp_path):
     assert sealed.n == 1 and sealed.hits == 1 and sealed.split == "sealed"
     assert dev.n == 1 and dev.hits == 0
     assert both.n == 2
+
+
+# ── live in-engine parity ────────────────────────────────────────────────
+
+
+@pytest.mark.engine
+def test_live_selection_matches_the_offline_walk():
+    from pathlib import Path
+
+    from friction.client import connect
+    from friction.config import Settings
+    from friction.gate import _iter_manifest, live_selection
+
+    try:
+        transport = connect(Settings.from_env(), prefer="bolt")
+    except Exception as exc:  # noqa: BLE001 - engine may not be running
+        pytest.skip(f"engine not reachable: {exc}")
+
+    root = Path("data/shipped/arms")
+    record = next(r for r in _iter_manifest(root / "manifest.jsonl")
+                  if r["instance_id"] == "django__django-11551")
+    try:
+        out = live_selection(transport, record, root, "arm_b", 6,
+                             band_offset=910_000_000_000)
+    finally:
+        transport.close()
+
+    assert out["parity"] is True
+    assert out["queries"] and out["queries"][0]["engine_ms"] < 1000
+    assert out["dropped_guarding_tests"] == 1

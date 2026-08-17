@@ -365,6 +365,77 @@ def compare_arms(manifest_path: Path, arms_root: Path, k: int) -> ArmComparison:
     )
 
 
+def live_selection(transport, record: dict, arms_root: Path, arm: str,
+                   k: int, band_offset: int = 900_000_000_000) -> dict:
+    """Run one instance's selection IN THE ENGINE and compare with offline.
+
+    Loads the instance's arm graph into the running engine (both the CALLS
+    edges and the materialised CALLED_BY reverse — the engine rejects incoming
+    variable-length patterns), executes ``build_selection_cypher`` per fix
+    site, and returns the selected set, per-query latency, and parity with the
+    offline walk. Ids are shifted by ``band_offset`` so a live load never
+    collides with anything already resident.
+    """
+    import time
+
+    entry = record.get(arm) or {}
+    fix = [int(x) for x in (entry.get("fix_site_ids") or [])]
+    tests = {int(x) for x in (entry.get("test_target_ids") or [])}
+    edges_file = _edges_path(arms_root, record["instance_id"], arm)
+    if not fix or not tests or edges_file is None:
+        raise ValueError("instance is not measurable on this arm")
+
+    g = _load_edges(edges_file)
+    off = band_offset
+
+    def _chunks(seq, size=500):
+        for i in range(0, len(seq), size):
+            yield seq[i:i + size]
+
+    node_rows = [{"id": n + off, "sid": str(n)} for n in g.nodes]
+    call_rows = [{"src": u + off, "dst": v + off} for u, v in g.edges]
+    rev_rows = [{"src": v + off, "dst": u + off} for u, v in g.edges]
+
+    t0 = time.perf_counter()
+    for chunk in _chunks(node_rows):
+        transport.query("UNWIND $rows AS row MERGE (n {id: row.id}) "
+                        "SET n:Sym, n.sid = row.sid", {"rows": chunk})
+    for stmt_rel, rows in (("CALLS", call_rows), ("CALLED_BY", rev_rows)):
+        for chunk in _chunks(rows):
+            transport.query(
+                f"UNWIND $rows AS row CREATE (a {{id: row.src}})"
+                f"-[:{stmt_rel}]->(b {{id: row.dst}})", {"rows": chunk})
+    load_ms = (time.perf_counter() - t0) * 1000
+
+    selected: set[int] = set()
+    queries = []
+    for f in fix:
+        cypher = build_selection_cypher(f + off, "CALLED_BY", k)
+        t1 = time.perf_counter()
+        rows = transport.query(cypher)
+        ms = (time.perf_counter() - t1) * 1000
+        reached = {int(r["id"]) - off for r in rows if r.get("id") is not None}
+        selected |= reached & tests
+        queries.append({"cypher": cypher, "engine_ms": round(ms, 1),
+                        "reached": len(reached)})
+
+    offline = select_tests(g, fix, tests, k)
+    return {
+        "instance_id": record["instance_id"],
+        "arm": arm,
+        "k": k,
+        "nodes_loaded": g.number_of_nodes(),
+        "edges_loaded": g.number_of_edges(),
+        "load_ms": round(load_ms, 1),
+        "queries": queries,
+        "engine_selected": len(selected),
+        "offline_selected": len(offline.selected),
+        "parity": selected == set(offline.selected),
+        "guarding_tests": len(tests),
+        "dropped_guarding_tests": len(tests - selected),
+    }
+
+
 def build_selection_cypher(node_id: int, rel_type: str = "CALLED_BY",
                            k: int = 6) -> str:
     """In-engine backwards selection from a changed symbol.

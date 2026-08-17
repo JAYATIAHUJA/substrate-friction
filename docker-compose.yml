@@ -27,7 +27,9 @@ services:
       retries: 30
 
   graph-node:
-    image: ghcr.io/hydra-db/hydradb:latest
+    # Pinned by digest: the exact image every number in docs/ was measured
+    # against (docs/pinned-engine-commit.txt has the source commit).
+    image: ghcr.io/hydra-db/hydradb@sha256:db78309a233be54662db29744047e985a39b51c45a270d1a1f47c31a62cdb709
     user: "10001:10001"
     depends_on:
       minio: { condition: service_started }

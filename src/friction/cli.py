@@ -805,6 +805,8 @@ def cmd_gate(args) -> int:
 
 def _gate_replay(args) -> int:
     """Replay one instance: the selection, the label, and the gap between them."""
+    if getattr(args, "live", False):
+        return _gate_replay_live(args)
     from friction.gate import (_edges_path, _load_edges, build_selection_cypher,
                                select_tests)
 
@@ -869,6 +871,48 @@ def _gate_replay(args) -> int:
         print(f"    {build_selection_cypher(int(fix[0]), 'CALLED_BY', args.k)}")
     print(RULE)
     return 1 if missed else 0
+
+
+def _gate_replay_live(args) -> int:
+    """The same replay, executed IN the engine — parity checked against offline."""
+    from friction.client import connect
+    from friction.gate import _iter_manifest, live_selection
+
+    record = next((r for r in _iter_manifest(MANIFEST_PATH)
+                   if r["instance_id"] == args.instance), None)
+    if record is None:
+        print(f"instance {args.instance} is not in {MANIFEST_PATH}")
+        return 2
+
+    transport = connect(Settings.from_env(), prefer="bolt")
+    try:
+        out = live_selection(transport, record, MANIFEST_PATH.parent,
+                             args.arm, args.k)
+    finally:
+        transport.close()
+
+    if args.json:
+        print(json.dumps(out, indent=2))
+        return 1 if out["dropped_guarding_tests"] else 0
+
+    print(RULE)
+    print(f"  {out['instance_id']}   LIVE — executed in the engine")
+    print(RULE)
+    print(f"  loaded       : {out['nodes_loaded']:,} nodes, "
+          f"{out['edges_loaded']:,} edges (+ CALLED_BY reverse) "
+          f"in {out['load_ms']:.0f} ms")
+    for q in out["queries"]:
+        print(f"  query        : {q['cypher']}")
+        print(f"                 engine {q['engine_ms']} ms, "
+              f"{q['reached']} nodes reached")
+    print(f"  engine selected {out['engine_selected']} of "
+          f"{out['guarding_tests']} guarding tests; offline walk agrees: "
+          f"parity={out['parity']}")
+    if out["dropped_guarding_tests"]:
+        print(f"  DROPPED: {out['dropped_guarding_tests']} guarding test(s) — "
+              f"the engine itself proves the miss.")
+    print(RULE)
+    return 1 if out["dropped_guarding_tests"] else 0
 
 
 def _gate_live(args) -> int:
@@ -965,6 +1009,9 @@ def main(argv: list[str] | None = None) -> int:
                           help="gate a real repository instead of the corpus")
     gate_cmd.add_argument("--changed", nargs="*", default=[],
                           help="changed file paths, relative to --repo")
+    gate_cmd.add_argument("--live", action="store_true",
+                          help="with --instance: load the graph into the "
+                               "running engine and execute the selection there")
     gate_cmd.add_argument("--json", action="store_true",
                           help="machine-readable, for CI and agents")
 
