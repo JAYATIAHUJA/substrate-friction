@@ -35,7 +35,7 @@ jobs:
         run: |
           # The engine container runs as uid 10001; a runner-created mount is
           # root-owned and the engine dies with PermissionDenied. Pre-create.
-          mkdir -p hydradb-data/graph hydradb-data/cache minio-data && chmod -R 777 hydradb-data minio-data
+          mkdir -p hydradb-data/graph minio-data && sudo chown -R 10001:10001 hydradb-data && chmod -R 777 minio-data
           docker compose up -d
           for i in $(seq 1 90); do
             if uv run python -c "
@@ -56,7 +56,7 @@ jobs:
         run: |
           docker compose down -v
           sudo rm -rf hydradb-data
-          mkdir -p hydradb-data/graph hydradb-data/cache && chmod -R 777 hydradb-data
+          mkdir -p hydradb-data/graph && sudo chown -R 10001:10001 hydradb-data
           docker compose up -d
           sleep 20
 
