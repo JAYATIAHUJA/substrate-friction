@@ -33,6 +33,9 @@ jobs:
 
       - name: Start pinned HydraDB
         run: |
+          # The engine container runs as uid 10001; a runner-created mount is
+          # root-owned and the engine dies with PermissionDenied. Pre-create.
+          mkdir -p hydradb-data minio-data && chmod -R 777 hydradb-data minio-data
           docker compose up -d
           for i in $(seq 1 90); do
             if uv run python -c "
@@ -52,7 +55,8 @@ jobs:
         # reads keep serving. Never trust read health as liveness; start clean.
         run: |
           docker compose down -v
-          rm -rf hydradb-data
+          sudo rm -rf hydradb-data
+          mkdir -p hydradb-data && chmod -R 777 hydradb-data
           docker compose up -d
           sleep 20
 
