@@ -363,3 +363,11 @@ def test_live_selection_matches_the_offline_walk():
     assert out["parity"] is True
     assert out["queries"] and out["queries"][0]["engine_ms"] < 1000
     assert out["dropped_guarding_tests"] == 1
+
+
+def test_sig_id_is_stable_and_banded():
+    from friction.engine_diff import SIG_BAND, sig_id
+    a = sig_id("m::f", "m::g")
+    assert a == sig_id("m::f", "m::g")
+    assert a != sig_id("m::g", "m::f")
+    assert a >= SIG_BAND

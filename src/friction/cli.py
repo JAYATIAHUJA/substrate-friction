@@ -873,6 +873,62 @@ def _gate_replay(args) -> int:
     return 1 if missed else 0
 
 
+def cmd_diff(args) -> int:
+    """The graph-delta anti-join, executed inside the engine.
+
+    Reifies every compared edge as a node, every distinct (src,dst) identity
+    as a Sig node, and asks the engine — per arm-A edge — whether a 2-hop
+    outward walk reaches an arm-B edge node. Refuses to print anything that
+    does not exactly reproduce the committed offline join (4381/1492).
+    """
+    from pathlib import Path as _P
+
+    from friction.client import connect
+    from friction.engine_diff import run_engine_diff
+    from friction.identity import discover_scip_prefix, joined_edge_sets
+    from friction.namematch.graph import build as build_arm_a
+    from friction.scip.extract import extract_edges
+    from friction.scip.schema import load_index
+
+    index_path = _P("data/instances/arms/django__django-10097/index.scip")
+    if not index_path.exists():
+        print("regeneration inputs absent (needs the local scip index); the "
+              "pinned result is committed in docs/engine-diff.md")
+        return 2
+
+    print("building arm A (tree-sitter) …")
+    arm_a, _ = build_arm_a(_P("data/repos/django"))
+    print("loading arm B (scip index) …")
+    index = load_index(index_path)
+    arm_b, _ = extract_edges(index)
+    prefix = discover_scip_prefix(index) + "django."
+    a_set, b_set, _ = joined_edge_sets(arm_a, arm_b, prefix, "django")
+
+    transport = connect(Settings.from_env(), prefer="bolt")
+    try:
+        d = run_engine_diff(
+            transport, a_set, b_set,
+            progress=lambda i, n: print(f"  anti-join {i}/{n} …"))
+    finally:
+        transport.close()
+
+    print(RULE)
+    print("  THE DISAGREEMENT SET, COMPUTED IN THE ENGINE")
+    print(RULE)
+    print(f"  reified      : {d.a_edges:,} arm-A + {d.b_edges:,} arm-B edge-"
+          f"nodes, {d.sigs:,} Sig nodes, loaded in {d.load_ms/1000:.1f} s")
+    print(f"  the query    : {d.sample_cypher}")
+    print(f"  anti-join    : {d.a_edges:,} queries in "
+          f"{d.query_ms_total/1000:.1f} s "
+          f"({d.query_ms_total/d.a_edges:.1f} ms/edge)")
+    print(f"  CONFIRMED    : {d.confirmed:,}")
+    print(f"  UNCONFIRMED  : {d.unconfirmed:,}")
+    print(f"  parity with the offline join (docs/graph-delta.md): EXACT — "
+          f"enforced, not observed")
+    print(RULE)
+    return 0
+
+
 def _gate_replay_live(args) -> int:
     """The same replay, executed IN the engine — parity checked against offline."""
     from friction.client import connect
@@ -1015,6 +1071,13 @@ def main(argv: list[str] | None = None) -> int:
     gate_cmd.add_argument("--json", action="store_true",
                           help="machine-readable, for CI and agents")
 
+    diff_cmd = sub.add_parser(
+        "diff",
+        help="the arm A vs arm B disagreement set, computed IN the engine")
+    diff_cmd.add_argument("--live", action="store_true", required=True,
+                          help="reify both edge sets in the engine and run "
+                               "the anti-join there (parity-gated)")
+
     srv_cmd = sub.add_parser("serve", help="run the FastAPI service with uvicorn")
     srv_cmd.add_argument("--host", default="127.0.0.1")
     srv_cmd.add_argument("--port", type=int, default=8000)
@@ -1097,6 +1160,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "gate":
         return cmd_gate(args)
+
+    if args.command == "diff":
+        return cmd_diff(args)
 
     if args.command == "serve":
         from friction.api import serve
