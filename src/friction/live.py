@@ -27,6 +27,8 @@ TEST_MARKERS = ("test_", "_test", "tests.", ".tests", "conftest")
 @dataclass(frozen=True)
 class LiveGate:
     repo: Path
+    graph_sha: str
+    repo_head: str
     arm: str
     k: int
     graph_nodes: int
@@ -102,13 +104,28 @@ def gate_repo(repo: Path, changed_files: list[str], arm: str = "arm_a",
 
     result = select_tests(g, changed_ids, test_ids, k)
 
+    # Staleness fingerprint: a verdict is about THIS graph of THIS commit.
+    # Consumers can detect a stale answer by re-hashing.
+    import hashlib
+    import subprocess
+    h = hashlib.sha256()
+    for u, v in sorted(g.edges):
+        h.update(f"{u},{v};".encode())
+    graph_sha = h.hexdigest()[:16]
+    try:
+        repo_head = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5).stdout.strip() or "n/a"
+    except Exception:
+        repo_head = "n/a"
+
     # Recall is a corpus prior, never a measurement on this repo.
     from friction.cli import MANIFEST_PATH
     audit = audit_recall(MANIFEST_PATH, MANIFEST_PATH.parent, arm, k)
     verdict = gate(audit)
 
     return LiveGate(
-        repo=repo, arm=arm, k=k,
+        repo=repo, graph_sha=graph_sha, repo_head=repo_head, arm=arm, k=k,
         graph_nodes=g.number_of_nodes(), graph_edges=g.number_of_edges(),
         changed_symbols=len(changed_ids),
         total_tests=len(test_ids),

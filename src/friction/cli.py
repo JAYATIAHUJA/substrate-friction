@@ -1094,6 +1094,7 @@ def _gate_live(args) -> int:
     if args.json:
         print(json.dumps({
             "repo": str(live.repo), "arm": live.arm, "k": live.k,
+            "graph_sha": live.graph_sha, "repo_head": live.repo_head,
             "decision": v.decision,
             "graph_nodes": live.graph_nodes, "graph_edges": live.graph_edges,
             "changed_symbols": live.changed_symbols,

@@ -10,11 +10,17 @@
   pipeline port, the corpus build does not fit the window.
 - **Field trial (the gate in a real repo's CI for weeks):** requires calendar
   time no hackathon has.
+- **The engine cold-start fix itself:** repro sharpened to "fails on every
+  native Linux FS, works only under VirtioFS" and posted to
+  [hydra-db/hydradb#101](https://github.com/hydra-db/hydradb/issues/101) with a
+  15-second repro loop; the patch needs strace-level debugging of SlateDB's
+  local store, beyond an honest same-day fix.
+- **LLM-driven abstention on SWE-bench:** the loop is demonstrated with a real
+  MCP client and a disclosed scripted policy (`docs/abstention-demo.md`);
+  wiring it into an LLM agent and measuring behaviour change at scale is the
+  study that follows.
 - **Upstream `RecallCert` PR:** drafted in `docs/upstream-issues.md`; opening
   it before the sketch genuinely builds would be theatre.
-- **Self-gating GitHub Action on our own PRs:** needs an exclude-path option
-  in `gate --repo` (this repo vendors 9 corpus repos that must not be parsed);
-  small, but not smaller than the honesty bar for shipping it untested.
 - **Live public deployment:** killed without hesitation per the fresh-store
   bootstrap bug on runner-class filesystems (upstream Draft A) — the repo must
   not ship a dead demo link.

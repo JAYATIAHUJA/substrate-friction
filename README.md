@@ -173,6 +173,17 @@ Rigor is a feature. Every claim below is a committed, runnable check.
   dev 0.548 vs sealed 0.538 on arm B (`docs/gate.md`).
 - **In-engine parity, everywhere** — `gate --live` and `diff --live` must
   agree exactly with their offline counterparts or they refuse to answer.
+- **The abstention loop is demonstrated, not argued**
+  (`docs/abstention-demo.md`) — a real MCP client over stdio calls
+  `gate_check` and changes behaviour on the verdict; the decision policy is
+  scripted and disclosed as such.
+- **The repo gates itself** — `.github/workflows/self-gate.yml` runs
+  `friction gate --repo src` on our own package every push and asserts the
+  gate *refuses*; the corpus verdict ships as a SARIF code-scanning finding.
+  Live verdicts carry a **staleness fingerprint** (`graph_sha` + repo HEAD).
+- **The origin is the integrity proof** (`docs/ORIGIN.md`) — the actual plan
+  series, superseded versions included: the dream, the protocol that killed
+  it, and what the autopsy found.
 
 ---
 
@@ -238,6 +249,18 @@ The metric the original spec asked for — bounded path *counts* between node se
 
 ![Recall vs identifier budget: both arms collapse under top-K truncation](docs/plots/budget-curves.svg)
 *Study S4 (`docs/budget-curves.md`, drawn from `data/shipped/budget-curves.json` by `scripts/render_assets.py`): keeping the top-K PageRank identifiers — what a repo map does — collapses guarding-test recall to 0/44 (arm B) for K ≤ 200; the full-graph row reproduces the gate headline exactly. A repo map is a second truncation stacked on an already-lossy graph.*
+
+### Finding 6 — the longitudinal ceiling: flat across eight years
+
+Study S5 (`docs/longitudinal.md`, pre-registered): the same two-arm pipeline
+applied to django at 1.11 / 2.2 / 3.2 / 4.2 / 5.0. The registered hypothesis —
+that the ceiling declines as a codebase grows — is **wrong, the third
+falsified pre-registration in this project**: the ceiling sits flat in a
+~0.75 band (0.753 / 0.749 / 0.757 / 0.762 / 0.758) while the graph grows.
+Name-match imprecision is a **stable property of the technique at any scale**,
+which makes the 0.746 headline a durable constant of the substrate, not a
+snapshot — and means waiting for the problem to change is not a strategy. No
+prior art measures graph-fidelity drift over a project lifetime.
 
 ---
 
