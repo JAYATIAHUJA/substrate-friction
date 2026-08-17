@@ -370,10 +370,12 @@ Every latency figure in this README traces to `docs/latency.md` (measured on one
 
 ## Upstream contributions
 
-Two contributions to `github.com/hydra-db/hydradb`, surfaced by this project:
+Four contributions to `github.com/hydra-db/hydradb`, surfaced by this project:
 
-- **Issue #81** — manifest GC fails under the documented `CLOUD_PROVIDER=local`: after enough sustained writes every write fails permanently while reads keep serving, so a read-only health check reports the node healthy while it is silently write-dead.
-- **PR #82** — cypher-compatibility docs covering 7 measured behaviours of the pinned build (inlined-literal set queries, `count(*)` vs rejected `count(n)`, `SSpaths` integer `sourceNode`, and the rest).
+- **[Issue #81](https://github.com/hydra-db/hydradb/issues/81)** — manifest GC fails under the documented `CLOUD_PROVIDER=local`: after enough sustained writes every write fails permanently while reads keep serving, so a read-only health check reports the node healthy while it is silently write-dead.
+- **[PR #82](https://github.com/hydra-db/hydradb/pull/82)** — cypher-compatibility docs covering 7 measured behaviours of the pinned build (inlined-literal set queries, `count(*)` vs rejected `count(n)`, `SSpaths` integer `sourceNode`, and the rest).
+- **[Issue #101](https://github.com/hydra-db/hydradb/issues/101)** — fresh-store bootstrap fails on Linux CI runners (`IsADirectory`) while identical config bootstraps on macOS; the documented cause of this repo's disclosed-red engine CI job, with a public repro workflow.
+- **[Issue #102](https://github.com/hydra-db/hydradb/issues/102)** — proposal for an `algo.RecallCert` procedure: in-engine certification of a selection result against labels, with `friction gate` as the motivating consumer.
 
 ---
 
