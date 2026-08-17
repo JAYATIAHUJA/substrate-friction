@@ -1,0 +1,51 @@
+name: Self-gate
+
+# The repo that audits graphs audits itself: every push/PR runs the gate on
+# this repository's own package (src-scoped — the checkout vendors 9 corpus
+# repos that must not be parsed) and uploads the corpus verdict as a SARIF
+# code-scanning finding. RUN_FULL is the expected verdict; the job asserts the
+# gate REFUSES (exit 1) rather than silently licensing a skip — fail-closed,
+# demonstrated on ourselves.
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+    paths: ["src/**", "tests/**"]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  self-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --extra dev
+
+      - name: Gate our own package (live graph build, prior stated as prior)
+        run: |
+          uv run friction gate --repo src --changed friction/gate.py --json > /tmp/self.json || true
+          uv run python -c "
+          import json
+          d = json.load(open('/tmp/self.json'))
+          assert d['graph_nodes'] > 0, 'graph build failed'
+          assert d['decision'] == 'RUN_FULL', 'gate licensed a skip below the bar'
+          print('self-gate:', d['decision'], '-', d['graph_nodes'], 'nodes,',
+                len(d['selected_tests']), 'tests selected, refused as designed')
+          "
+
+      - name: Corpus verdict as SARIF
+        run: uv run friction gate --arm arm_b --sarif > friction.sarif || true
+
+      - name: Upload to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: friction.sarif
+          category: substrate-friction
