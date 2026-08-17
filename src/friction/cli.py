@@ -782,6 +782,12 @@ def cmd_gate(args) -> int:
                     "ruleId": "SF001",
                     "level": level,
                     "message": {"text": verdict.reason},
+                    "locations": [{
+                        "physicalLocation": {
+                            "artifactLocation": {"uri": "README.md"},
+                            "region": {"startLine": 1},
+                        },
+                    }],
                 }],
             }],
         }, indent=2))
