@@ -325,6 +325,16 @@ harder relation.
 
 ## Limitations
 
+- **The CI engine job is disclosed as failing.** The pinned engine bootstraps a
+  fresh store cleanly on macOS/Docker Desktop but dies with `IsADirectory` on
+  the GitHub runner's filesystem. The badge covers the `tests` job (552 tests +
+  the gate verdict reproduced in CI); the Bolt round trip
+  (`scripts/hydra_proof.py` — write via the verified loader forms, walk via
+  `CALLED_BY`) is proven against the running engine locally, and the CI job
+  that attempts it is `continue-on-error` with the cause written in the
+  workflow, not hidden.
+
+
 - **Precision is a ceiling.** Arm B under-reports on untyped receivers (`cursor(54)`), so `0.746` bounds one direction; true precision is `>= 0.746`, never `<=`.
 - **The directional gap is real.** `fix → test` is `0/44`, `test → fix` is `24/44 (55%)`, undirected is `43/44 (98%)` — and the `55% → 98%` gap is fixture / `setUp` / `parametrize` / dispatch edges a static call graph structurally cannot see.
 - **Python only.** The type-resolved arm depends on `scip-python`/pyright.
