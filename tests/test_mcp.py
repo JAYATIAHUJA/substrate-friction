@@ -27,3 +27,19 @@ def test_gate_explain_is_task_shaped_and_names_the_dropped_tests():
     assert payload[0]["dropped_guarding_tests"]
     assert "-[:CALLED_BY*1..6]->" in payload[0]["cypher"]
     assert payload[1]["error"] == "unknown instance"
+
+
+def test_graph_query_returns_labelled_edges_with_provenance():
+    from friction.mcp_server import graph_query
+    payload = json.loads(graph_query(symbols=["get_combinator_sql"]))
+    assert payload["counts"]["confirmed"] == 4381
+    assert payload["matched"] >= 1
+    assert all(e["trust"] in {"confirmed", "name_only"}
+               for e in payload["edges"])
+    assert payload["engine_digest"].startswith("sha256:")
+
+
+def test_graph_query_trust_filter():
+    from friction.mcp_server import graph_query
+    payload = json.loads(graph_query(symbols=["extend"], trust="name_only"))
+    assert all(e["trust"] == "name_only" for e in payload["edges"])

@@ -118,3 +118,49 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
+
+
+def graph_query(symbols: list[str], trust: str = "any",
+                limit: int = 50) -> str:
+    """Certified call-graph edges touching the given symbols — with receipts.
+
+    Task-shaped: several symbols per call. Every edge carries a trust label
+    (`confirmed` = both extraction arms agree; `name_only` = name-matched
+    only, unconfirmed by type resolution), the arms that produced it, and the
+    source commit. An agent consuming this graph knows exactly how much to
+    believe each edge — which no raw repo map tells it.
+    """
+    import json as _json
+    from pathlib import Path as _P
+
+    path = _P("data/shipped/consensus.json")
+    if not path.exists():
+        return _json.dumps({"error": "consensus artifact absent"})
+    doc = _json.loads(path.read_text(encoding="utf-8"))
+    if trust not in {"any", "confirmed", "name_only"}:
+        return _json.dumps({"error": f"unknown trust filter {trust!r}"})
+
+    wanted = [s.lower() for s in symbols]
+    hits = []
+    for e in doc["edges"]:
+        if trust != "any" and e["trust"] != trust:
+            continue
+        hay = f"{e['src']} {e['dst']}".lower()
+        if any(w in hay for w in wanted):
+            hits.append(e)
+            if len(hits) >= limit:
+                break
+    return _json.dumps({
+        "commit": doc["commit"],
+        "engine_digest": doc["engine_digest"],
+        "counts": doc["counts"],
+        "matched": len(hits),
+        "edges": hits,
+        "note": ("trust=confirmed edges are agreed by both arms; name_only "
+                 "edges are unconfirmed by type resolution and include the "
+                 "collision classes in docs/edge-taxonomy.md. The arm-B-only "
+                 "recall gap is counted in `counts.b_only`."),
+    }, indent=2)
+
+
+mcp.tool()(graph_query)
