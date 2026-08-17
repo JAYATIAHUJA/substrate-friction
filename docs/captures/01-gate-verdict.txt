@@ -1,0 +1,21 @@
+$ friction gate --arm arm_b
+────────────────────────────────────────────────────────────────────
+[FAIL]  RUN_FULL      arm=arm_b  k=6
+────────────────────────────────────────────────────────────────────
+  measured test->fix recall : 0.545  (24/44 labelled instances)
+  bar for skipping          : 0.95
+
+  measured test->fix recall 0.545 on n=44 labelled instances is below the 0.95 bar: 45% of tests known to guard their fix are not reachable in this graph, so a skip would silently drop them
+
+  per repo:
+    django          24/44   0.55  ██████████········
+
+  20 instances where the guarding test is unreachable. First 5:
+    django__django-10097
+    django__django-10880
+    django__django-11066
+    django__django-11138
+    django__django-11149
+
+  replay one:  friction gate --instance django__django-10097
+────────────────────────────────────────────────────────────────────

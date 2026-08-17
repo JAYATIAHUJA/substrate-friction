@@ -1,0 +1,10 @@
+$ friction gate --instance django__django-11551 --live
+────────────────────────────────────────────────────────────────────
+  django__django-11551   LIVE — executed in the engine
+────────────────────────────────────────────────────────────────────
+  loaded       : 28,353 nodes, 61,536 edges (+ CALLED_BY reverse) in 16631 ms
+  query        : MATCH (s {id: 920310000127})-[:CALLED_BY*1..6]->(n) RETURN n.id AS id
+                 engine 2.6 ms, 2 nodes reached
+  engine selected 0 of 1 guarding tests; offline walk agrees: parity=True
+  DROPPED: 1 guarding test(s) — the engine itself proves the miss.
+────────────────────────────────────────────────────────────────────
