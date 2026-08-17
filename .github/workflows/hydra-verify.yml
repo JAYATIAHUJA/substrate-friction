@@ -26,7 +26,7 @@ jobs:
           enable-cache: true
 
       - name: Sync
-        run: uv sync
+        run: uv sync --extra dev
 
       - name: Unit tests (no engine)
         run: uv run pytest -q -m "not engine"
