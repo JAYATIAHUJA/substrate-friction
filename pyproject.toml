@@ -19,6 +19,7 @@ dependencies = [
     "grpcio-tools>=1.64",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.52.3",
+    "mcp>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -26,6 +27,7 @@ dev = ["pytest>=8.3", "pytest-timeout>=2.3"]
 
 [project.scripts]
 friction = "friction.cli:main"
+friction-mcp = "friction.mcp_server:run"
 
 [build-system]
 requires = ["hatchling"]
