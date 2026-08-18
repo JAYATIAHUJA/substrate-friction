@@ -1105,10 +1105,17 @@ def _gate_replay_live(args) -> int:
 
 
 def _gate_live(args) -> int:
-    """Gate a real repository: build its graph, select, decide."""
+    """Gate a real repository: build its graph, select, decide.
+
+    Live extraction is name-matched (arm A) — tree-sitter, dependency-free.
+    The verdict is therefore always judged by the arm-A prior and LABELED
+    arm_a; an --arm arm_b flag is not silently honored here (there is no live
+    scip extractor), so the extractor and the prior can never disagree.
+    """
     from friction.live import gate_repo
 
-    live = gate_repo(args.repo, list(args.changed), args.arm, args.k)
+    arm = "arm_a"  # live extraction is name-matched; label it honestly
+    live = gate_repo(args.repo, list(args.changed), arm, args.k)
     v = live.verdict
 
     if args.json:

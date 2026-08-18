@@ -259,6 +259,22 @@ class GateVerdict:
     reason: str
 
 
+def wilson_lb(hits: int, n: int, z: float = 1.645) -> float:
+    """One-sided 95% Wilson lower bound on a binomial proportion.
+
+    The gate skips only when THIS clears the bar — never the point estimate
+    alone — so a perfect tiny sample (3/3) can never license a skip.
+    """
+    import math
+    if n == 0:
+        return 0.0
+    p = hits / n
+    denom = 1 + z * z / n
+    centre = p + z * z / (2 * n)
+    margin = z * math.sqrt((p * (1 - p) + z * z / (4 * n)) / n)
+    return (centre - margin) / denom
+
+
 def gate(audit: RecallAudit, threshold: float = SAFE_SKIP_RECALL) -> GateVerdict:
     """Turn a measured recall into a decision about skipping tests."""
     recall = audit.recall
@@ -271,11 +287,22 @@ def gate(audit: RecallAudit, threshold: float = SAFE_SKIP_RECALL) -> GateVerdict
             "the only defensible decision is to run everything",
         )
 
+    lb = wilson_lb(audit.hits, audit.n)
     if recall >= threshold:
+        if lb >= threshold:
+            return GateVerdict(
+                "SKIP_SAFE", recall, audit.n, audit.arm, audit.k, threshold,
+                f"measured test->fix recall {recall:.3f} on n={audit.n} "
+                f"labelled instances meets the {threshold:.2f} bar and so does "
+                f"its one-sided 95% lower bound ({lb:.3f})",
+            )
         return GateVerdict(
-            "SKIP_SAFE", recall, audit.n, audit.arm, audit.k, threshold,
-            f"measured test->fix recall {recall:.3f} on n={audit.n} labelled "
-            f"instances meets the {threshold:.2f} bar",
+            "RUN_FULL", recall, audit.n, audit.arm, audit.k, threshold,
+            f"measured test->fix recall {recall:.3f} meets the "
+            f"{threshold:.2f} bar but the one-sided 95% lower bound "
+            f"({lb:.3f}) does not: n={audit.n} labelled instances is too "
+            f"little evidence to license a skip — a perfect 3/3 would fail "
+            f"this test too",
         )
 
     dropped = round((1.0 - recall) * 100)
