@@ -3,6 +3,14 @@
 Hard cap **3:00**. Target cut **2:50**. Narration below is **~410 words**
 (≈2:45 at a brisk, confident pace — rehearse once with a timer).
 
+**Research-backed structure** (Devpost judge interviews + winning-pitch
+analyses): elevator pitch inside the first seconds; Problem → Solution →
+Proof → **Potential**; show-don't-tell via edited real footage (judges respect
+a smooth recording over a live crash); explicit requirement compliance —
+some rubrics dock a point per 10 s over the cap, so the 2:50 target is not
+style, it is scoring. Footage may be speed-ramped; **audio is never
+sped up**.
+
 **The strategy, stated plainly:** a human judge feels the wow in the cold
 open and the live-engine shot. An AI reviewer transcribes the audio and OCRs
 the frames — so every rubric-relevant fact is **spoken in a full sentence AND
@@ -32,6 +40,12 @@ command, recorded live (speed-ramped in edit where noted).
 
 ---
 
+**Burn a tiny section chip top-left of every shot**, mirroring the site's
+numbered labels: `01/PROBLEM` `02/WHAT WE BUILT` `03/RESULTS` `04/LIVE DEMO`
+`05/HYDRADB` `06/PROOF+POTENTIAL`. A judge (or an AI filter) checking "does
+it cover the four required elements, in order?" sees the answer without
+rewinding.
+
 ## THE TIMELINE
 
 ### SHOT 0 — COLD OPEN · 0:00–0:12 · [PROBLEM begins]
@@ -47,10 +61,15 @@ NOT SELECTED — 370 guarding test node(s) are unreachable
 **Narration:**
 > "This test-selection walk is provably complete. It found **zero** of the
 > **three hundred and seventy** tests that guard this fix. Complete — and
-> blind."
+> blind. Substrate Friction is the pre-flight check that catches this —
+> before anything skips."
 
-**Edit:** freeze-frame on `370`, 1-beat silence before Shot 1. This is the
-"what the fuck" moment; let it land.
+**On-screen chip (burned in, bottom):** `substrate—friction · the pre-flight
+check for the graph under your AI coding agent`
+
+**Edit:** freeze-frame on `370`, 1-beat silence. The wow and the elevator
+pitch land together inside the first twelve seconds — judges reviewing
+back-to-back know what this is before Shot 1.
 
 ---
 
@@ -60,9 +79,8 @@ NOT SELECTED — 370 guarding test node(s) are unreachable
 (hold on the yellow "≠ program-complete" box).
 
 **Narration:**
-> "Every coding agent builds a graph of your repo first — by matching names —
-> and tools skip tests on it. The trap: the walk can be complete for the
-> **graph** while the graph is missing the edge that mattered in the
+> "Every coding agent builds a graph of your repo by matching names — and
+> tools skip tests on it. The trap: complete for the **graph**, blind to the
 > **program**. An extractor can't fail-closed on an edge it never knew
 > existed."
 
@@ -147,17 +165,19 @@ upstream links in the footer.
 
 ---
 
-### SHOT 6 — THE INTEGRITY CLOSE · 2:32–2:50
+### SHOT 6 — PROOF + POTENTIAL · 2:32–2:52
 
 **Screen:** `fig-negative-control.svg` (3 s) → terminal `friction verify` →
 `VERIFY OK` (capture 08) → end card: site hero with the pixel tree, URL +
 repo overlaid.
 
 **Narration:**
-> "How do you know this is real? Delete edges and the instrument collapses
-> to zero. Three pre-registered hypotheses came back wrong and ship as
-> written. And one command — friction verify — re-derives every number you
-> just watched. Substrate Friction: measure the graph before you trust it."
+> "Is this real? Delete edges and the instrument collapses to zero. Three
+> pre-registered hypotheses came back wrong and ship as written. One
+> command — friction verify — re-derives every number you just watched.
+> And it's a beginning: an in-engine certification primitive is proposed
+> upstream, and every graph a coding agent trusts needs this gate.
+> Substrate Friction: measure the graph before you trust it."
 
 **Edit:** end card holds 3 s to exactly 2:50–2:55. HARD STOP before 3:00.
 
