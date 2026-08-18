@@ -16,7 +16,7 @@ $ friction gate --repo src --changed friction/gate.py
 [38;5;240m────────────────────────────────────────────────────────────────────[0m
 [38;5;208;1m[FAIL][0m  [1mRUN_FULL[0m      [38;5;245msrc  arm=arm_a  k=6[0m
 [38;5;240m────────────────────────────────────────────────────────────────────[0m
-  graph            : 417 nodes, 592 edges
+  graph            : 417 nodes, 593 edges
   changed symbols  : 17
   tests in repo    : 27
   tests selected   : 1
@@ -24,7 +24,7 @@ $ friction gate --repo src --changed friction/gate.py
 
   measured test->fix recall 0.500 on n=30 labelled instances is below the 0.95 bar: 50% of tests known to guard their fix are not reachable in this graph, so a skip would silently drop them
 
-  Recall 0.500 is the value measured for 'arm_a'-class graphs on the labelled corpus (n=30), not a measurement on src. An unlabelled repository cannot yield a recall figure; this is that class's prior, applied.
+  Recall 0.500 is the value measured for 'arm_a'-class graphs on the labelled corpus (n=30), not a measurement on src. An unlabelled repository cannot yield a recall figure; this is that class's prior, applied. Per-repo recall spans 0.50–0.50 across 1 repo; the pooled one-sided 95% lower bound is 0.356.
 
   selected (first 10):
     friction.gate::select_tests

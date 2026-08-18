@@ -19,7 +19,8 @@ from pathlib import Path
 
 import networkx as nx
 
-from friction.gate import GateVerdict, audit_recall, gate, select_tests
+from friction.gate import (GateVerdict, audit_recall, gate, select_tests,
+                          wilson_lb)
 
 TEST_MARKERS = ("test_", "_test", "tests.", ".tests", "conftest")
 
@@ -159,5 +160,12 @@ def gate_repo(repo: Path, changed_files: list[str], arm: str = "arm_a",
             f"Recall {verdict.measured_recall:.3f} is the value measured for "
             f"'{arm}'-class graphs on the labelled corpus (n={audit.n}), not a "
             f"measurement on {repo.name}. An unlabelled repository cannot yield "
-            f"a recall figure; this is that class's prior, applied."),
+            f"a recall figure; this is that class's prior, applied. Per-repo "
+            f"recall spans "
+            f"{min(h / t for h, t in audit.per_repo.values() if t):.2f}–"
+            f"{max(h / t for h, t in audit.per_repo.values() if t):.2f} "
+            f"across {len(audit.per_repo)} "
+            f"{'repo' if len(audit.per_repo) == 1 else 'repos'}; "
+            f"the pooled one-sided 95% "
+            f"lower bound is {wilson_lb(audit.hits, audit.n):.3f}."),
     )

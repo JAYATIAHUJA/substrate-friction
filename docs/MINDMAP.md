@@ -83,6 +83,14 @@ the seatbelt. Then we made the database itself do the measuring, published
 every mistake we made along the way, and built one command that re-proves
 every number."
 
+## If pressed
+
+Every hard question already has its strongest form filed in
+`docs/objections.md` — including the two bugs an adversarial review found
+(and we fixed same-day). If someone raises: narrow oracle → §4; hindsight
+→ §5; economics → §9; "it's just exit 1" → §1; the pivot → §2. The answer
+is one sentence: *"Filed, answered, with receipts."*
+
 ## The one rule
 
 **Lead with the map and the seatbelt. Earn the right to say "recall" and

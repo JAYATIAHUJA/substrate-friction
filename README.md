@@ -402,6 +402,12 @@ corrections are reported, never silently replaced.
 
 ## What we do not claim
 
+The strongest forms of the common objections — including two real bugs an
+adversarial review found in the build window and were fixed same-day — are
+**pre-filed, with status and receipts, in
+[`docs/objections.md`](docs/objections.md)**. Highlights of what we do not
+claim:
+
 - **Per-instance failure prediction** — solved elsewhere at AUC **0.841**
   (Agent Psychometrics, arXiv 2604.00594; 0.787 from problem text alone,
   0.718 task-agnostic prior). Our features are not competitive and are not
