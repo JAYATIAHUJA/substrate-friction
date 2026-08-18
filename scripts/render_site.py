@@ -37,6 +37,11 @@ CSS = """
 --line-strong:#353535;--accent:#ff571a;--yellow:#f9c425;--text:#fff;
 --body:#dadada;--muted:#747474}
 *{margin:0;padding:0;box-sizing:border-box}
+::selection{background:var(--accent);color:#0a0a0a}
+::-webkit-scrollbar{width:10px;background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--line-strong);border:2px solid
+var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--accent)}
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--body);
 font-family:Inter,system-ui,sans-serif;font-size:16px;line-height:1.65}
@@ -68,7 +73,7 @@ text-decoration:none}
 color:#0a0a0a}
 .btn.primary:hover{background:#e64d15;color:#0a0a0a}
 header.hero{padding:90px 0 60px;border-bottom:1px solid var(--line)}
-.hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;
+.hero-grid{display:grid;grid-template-columns:0.82fr 1.18fr;gap:44px;
 align-items:center}
 .hero h1{font-size:clamp(52px,7.5vw,88px);line-height:.95;
 margin:14px 0 20px}
@@ -76,12 +81,26 @@ margin:14px 0 20px}
 .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
 .chip{font-family:'Geist Mono',ui-monospace,monospace;font-size:11px;
 color:var(--muted);border:1px solid var(--line);padding:4px 10px}
-.hero img{width:100%;border:1px solid var(--line)}
+.hero figure.term{position:relative;margin-right:-56px}
+.hero figure.term img{width:100%;border:1px solid var(--line-strong);
+display:block}
+.hero figure.term::after{content:'';position:absolute;inset:0 0 auto 0;
+height:calc(100% - 0px);pointer-events:none;
+background:repeating-linear-gradient(0deg,transparent 0 3px,
+rgba(0,0,0,.22) 3px 4px)}
+.hero figure.term:hover img{border-color:var(--accent)}
+@media(max-width:900px){.hero figure.term{margin-right:0}}
 section{padding:70px 0;border-bottom:1px solid var(--line)}
 section h2{font-size:40px;margin:10px 0 24px}
+.caret{display:inline-block;width:.45em;height:.9em;background:var(--accent);
+margin-left:.12em;vertical-align:-.08em;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.caret{animation:none}}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
 background:var(--line);border:1px solid var(--line)}
-.stat{background:var(--raised);padding:28px 22px}
+.stat{background:var(--raised);padding:28px 22px;border:1px solid
+transparent;transition:border-color .15s}
+.stat:hover{border-color:var(--accent)}
 .stat .v{font-family:'Geist Mono',ui-monospace,monospace;font-size:36px;
 color:var(--accent);font-weight:500}
 .stat .l{font-size:13px;color:var(--muted);margin-top:6px}
@@ -126,7 +145,9 @@ img.diagram{width:100%;border:1px solid var(--line)}
 .artband img{width:100%;display:block}
 .artband figcaption{font-size:12px;color:var(--muted);padding:10px 24px 26px}
 .gallery{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:8px}
-.gallery figure img{width:100%;border:1px solid var(--line)}
+.gallery figure img{width:100%;border:1px solid var(--line);
+transition:border-color .15s}
+.gallery figure:hover img{border-color:var(--accent)}
 .gallery figure.wide{grid-column:1/-1}
 @media(max-width:900px){.gallery{grid-template-columns:1fr}}
 figcaption{font-size:12.5px;color:var(--muted);margin-top:10px}
@@ -290,7 +311,7 @@ def body() -> str:
 <header class="hero"><div class="wrap hero-grid">
 <div>
 <div class="micro">01 / TEST SELECTION SAFETY</div>
-<h1>Before your tool skips a test, measure the graph it trusted.</h1>
+<h1>Before your tool skips a test, measure the graph it trusted.<span class="caret" aria-hidden="true"></span></h1>
 <p>Born as a pre-flight check for AI coding agents — <em>which tickets do
 we not give the robot?</em> — and reforged one level deeper: <em>which graphs
 should the robot not trust?</em> <code>friction gate</code> weighs the graph
@@ -306,7 +327,7 @@ you before the agent even starts.</p>
 <span class="chip">pre-registered studies</span>
 </div>
 </div>
-<figure>
+<figure class="term">
 <img src="plots/hero-terminal.svg" alt="Terminal: friction gate --live — engine selects 0 of 1 guarding tests, parity with offline walk is True, the engine itself proves the miss." loading="eager">
 <figcaption>A real capture: the engine executes the selection and proves the
 dropped guarding test. <a href="https://github.com/areycruzer/substrate-friction/blob/main/docs/captures/03-live-parity.txt">docs/captures/03-live-parity.txt</a></figcaption>
