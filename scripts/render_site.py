@@ -141,12 +141,24 @@ footer .digest{margin-top:36px;color:var(--muted);
 font-family:'Geist Mono',ui-monospace,monospace;font-size:11px;
 word-break:break-all}
 img.diagram{width:100%;border:1px solid var(--line)}
-.walkterm{margin:26px 0;border:1px solid var(--line-strong)}
-.walkterm figcaption{background:var(--bg);padding:8px 14px;border-bottom:1px
-solid var(--line)}
-.walkterm pre{background:var(--raised);padding:16px 18px;overflow-x:auto;
+details.walkterm{margin:18px 0;border:1px solid var(--line-strong)}
+details.walkterm summary{cursor:pointer;background:var(--bg);padding:9px 14px;
+border-bottom:1px solid var(--line);list-style:none;display:flex;gap:10px;
+align-items:baseline;font-family:'Geist Mono',ui-monospace,monospace;
+font-size:12.5px;color:var(--body)}
+details.walkterm summary::-webkit-details-marker{display:none}
+details.walkterm summary::before{content:"▸";color:var(--accent);
+font-size:11px;transition:transform .15s}
+details.walkterm[open] summary::before{transform:rotate(90deg)}
+details.walkterm summary .hint{margin-left:auto;color:var(--muted);
+font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}
+details.walkterm pre{background:var(--raised);padding:16px 18px;overflow-x:auto;
 font-family:'Geist Mono',ui-monospace,monospace;font-size:12.5px;
 line-height:1.55;color:var(--body)}
+.walkver{flex:0 0 auto;display:flex;align-items:center;padding:0 14px;
+color:var(--muted);font:600 10px 'Geist Mono',ui-monospace,monospace;
+letter-spacing:.12em;text-transform:uppercase;border-left:1px solid var(--line);
+background:var(--bg)}
 .artband{margin:0;border-bottom:1px solid var(--line)}
 .artband img{width:100%;display:block}
 .artband figcaption{font-size:12px;color:var(--muted);padding:10px 24px 26px}
@@ -712,6 +724,7 @@ def _walkstage() -> str:
 <button aria-pressed="false"><span class="num">04</span>the engine proves</button>
 <button aria-pressed="false"><span class="num">05</span>the agent asks</button>
 <button aria-pressed="false"><span class="num">06</span>check us</button>
+<div class="walkver">build 3</div>
 </div>
 <svg viewBox="0 0 960 420" role="img" aria-label="Six scenes: a real Django bug, the map that misses its guarding tests, the gate that refuses, the engine that proves it, the agent that abstains, and the one command that re-derives every number">
 <defs><pattern id="wdots" width="24" height="24" patternUnits="userSpaceOnUse">
@@ -817,8 +830,9 @@ def walkthrough() -> str:
     from committed records. Running this page requires nothing."""
 
     def term(name, cap):
-        return (f'<figure class="walkterm"><figcaption class="micro">'
-                f'{name}</figcaption><pre>{cap}</pre></figure>')
+        return (f'<details class="walkterm"><summary><span>{name}</span>'
+                f'<span class="hint">receipt · verbatim · click</span>'
+                f'</summary><pre>{cap}</pre></details>')
 
     steps = f"""
 <section><div class="wrap">

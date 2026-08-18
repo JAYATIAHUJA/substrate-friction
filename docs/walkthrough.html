@@ -59,6 +59,7 @@ first and backs off → the one command that re-derives every number.</p>
 <button aria-pressed="false"><span class="num">04</span>the engine proves</button>
 <button aria-pressed="false"><span class="num">05</span>the agent asks</button>
 <button aria-pressed="false"><span class="num">06</span>check us</button>
+<div class="walkver">build 3</div>
 </div>
 <svg viewBox="0 0 960 420" role="img" aria-label="Six scenes: a real Django bug, the map that misses its guarding tests, the gate that refuses, the engine that proves it, the agent that abstains, and the one command that re-derives every number">
 <defs><pattern id="wdots" width="24" height="24" patternUnits="userSpaceOnUse">
@@ -207,7 +208,7 @@ lets us grade the machines.</p>
 58,006 connections — and walks it backwards from the change to find affected
 tests. The walk finishes. The map says: <em>done, checked everything.</em>
 Here is that exact replay:</p>
-<figure class="walkterm"><figcaption class="micro">friction gate --instance django__django-10097</figcaption><pre>$ friction gate --instance django__django-10097
+<details class="walkterm"><summary><span>friction gate --instance django__django-10097</span><span class="hint">receipt · verbatim · click</span></summary><pre>$ friction gate --instance django__django-10097
 ────────────────────────────────────────────────────────────────────
   django__django-10097
 ────────────────────────────────────────────────────────────────────
@@ -232,7 +233,7 @@ Here is that exact replay:</p>
 
   the query, in the engine:
     MATCH (s {id: 20000003779})-[:CALLED_BY*1..6]-&gt;(n) RETURN n.id AS id
-────────────────────────────────────────────────────────────────────</pre></figure>
+────────────────────────────────────────────────────────────────────</pre></details>
 <p style="max-width:66ch"><b>Zero of the 370 bug-catching tests were
 selected — and the walk was provably complete.</b> The map was perfectly
 drawn and still missing the roads that mattered. Without a seatbelt, this
@@ -246,7 +247,7 @@ bug ships, silently.</p>
 asks: <em>has this class of map been proven good?</em> Measured over 172
 real bugs, its hit rate is 0.545 on Django and 0.419 pooled — far below the
 0.95 bar. Verdict, with exit code 1 (in CI, that blocks the merge):</p>
-<figure class="walkterm"><figcaption class="micro">friction gate --arm arm_b</figcaption><pre>$ friction gate --arm arm_b
+<details class="walkterm"><summary><span>friction gate --arm arm_b</span><span class="hint">receipt · verbatim · click</span></summary><pre>$ friction gate --arm arm_b
 ────────────────────────────────────────────────────────────────────
 [FAIL]  RUN_FULL      arm=arm_b  k=6
 ────────────────────────────────────────────────────────────────────
@@ -266,7 +267,7 @@ real bugs, its hit rate is 0.545 on Django and 0.419 pooled — far below the
     django__django-11149
 
   replay one:  friction gate --instance django__django-10097
-────────────────────────────────────────────────────────────────────</pre></figure>
+────────────────────────────────────────────────────────────────────</pre></details>
 </div></section>
 
 <section><div class="wrap">
@@ -277,7 +278,7 @@ graph engine run the check itself: 61,536 connections in, the walk answered
 in 2.6 milliseconds, matching our offline answer exactly — and naming the
 dropped test. (This live run uses instance
 <code>django__django-11551</code>, chosen for load size.)</p>
-<figure class="walkterm"><figcaption class="micro">friction gate --instance django__django-11551 --live</figcaption><pre>$ friction gate --instance django__django-11551 --live
+<details class="walkterm"><summary><span>friction gate --instance django__django-11551 --live</span><span class="hint">receipt · verbatim · click</span></summary><pre>$ friction gate --instance django__django-11551 --live
 ────────────────────────────────────────────────────────────────────
   django__django-11551   LIVE — executed in the engine
 ────────────────────────────────────────────────────────────────────
@@ -286,7 +287,7 @@ dropped test. (This live run uses instance
                  engine 2.6 ms, 2 nodes reached
   engine selected 0 of 1 guarding tests; offline walk agrees: parity=True
   DROPPED: 1 guarding test(s) — the engine itself proves the miss.
-────────────────────────────────────────────────────────────────────</pre></figure>
+────────────────────────────────────────────────────────────────────</pre></details>
 </div></section>
 
 <section><div class="wrap">
@@ -296,7 +297,7 @@ dropped test. (This live run uses instance
 OpenHands speak — a real client session asks the gate before trusting its
 own map. The decision rule here is a scripted, disclosed policy; the
 transport, the server and the verdict are real:</p>
-<figure class="walkterm"><figcaption class="micro">scripts/abstention_demo.py — MCP session</figcaption><pre>$ uv run python scripts/abstention_demo.py
+<details class="walkterm"><summary><span>scripts/abstention_demo.py — MCP session</span><span class="hint">receipt · verbatim · click</span></summary><pre>$ uv run python scripts/abstention_demo.py
 [client] connected over stdio; server tools: ['gate_check', 'gate_explain', 'graph_query']
 [agent]  task: 'change src touching the ORM; run affected tests'
 [agent]  policy (scripted, disclosed): ask gate_check before trusting any graph-selected subset
@@ -305,7 +306,7 @@ transport, the server and the verdict are real:</p>
 [gate]   evidence replay: django__django-10097 — graph_complete=True, selected 0 of 370 guarding tests
 [agent]  behaviour taken: full-suite
 
-wrote /tmp/abst.md</pre></figure>
+wrote /tmp/abst.md</pre></details>
 </div></section>
 
 <section><div class="wrap">
@@ -314,8 +315,8 @@ wrote /tmp/abst.md</pre></figure>
 <p style="max-width:66ch">Every figure on this site is regenerated from one
 committed artifact, and <code>friction verify</code> re-checks the whole
 chain — the shipped graphs, the summary, the README, this site:</p>
-<figure class="walkterm"><figcaption class="micro">friction verify</figcaption><pre>$ friction verify
-VERIFY OK: shipped graphs re-audited (24/44, 15/30); corpus summary re-derived from per-instance rows; docs/README/site quote the artifact exactly.</pre></figure>
+<details class="walkterm"><summary><span>friction verify</span><span class="hint">receipt · verbatim · click</span></summary><pre>$ friction verify
+VERIFY OK: shipped graphs re-audited (24/44, 15/30); corpus summary re-derived from per-instance rows; docs/README/site quote the artifact exactly.</pre></details>
 <p style="max-width:66ch">The deep story — how the maps were measured, the
 five pre-registered studies, three falsified hypotheses, three kept
 retractions — is on the <a href="index.html">main page</a> and in the
