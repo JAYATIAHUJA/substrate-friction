@@ -1,0 +1,10 @@
+$ uv run python scripts/abstention_demo.py
+[client] connected over stdio; server tools: ['gate_check', 'gate_explain', 'graph_query']
+[agent]  task: 'change src touching the ORM; run affected tests'
+[agent]  policy (scripted, disclosed): ask gate_check before trusting any graph-selected subset
+[gate]   decision=RUN_FULL recall=0.5455 n=44 bar=0.95
+[agent]  ABSTAIN from subset selection -> running the FULL suite (the external signal overrode the graph walk)
+[gate]   evidence replay: django__django-10097 — graph_complete=True, selected 0 of 370 guarding tests
+[agent]  behaviour taken: full-suite
+
+wrote /tmp/abst.md

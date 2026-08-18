@@ -1,0 +1,17 @@
+$ friction gate --repo src --changed friction/gate.py
+────────────────────────────────────────────────────────────────────
+[FAIL]  RUN_FULL      src  arm=arm_b  k=6
+────────────────────────────────────────────────────────────────────
+  graph            : 406 nodes, 552 edges
+  changed symbols  : 16
+  tests in repo    : 27
+  tests selected   : 1
+  graph-complete   : True
+
+  measured test->fix recall 0.545 on n=44 labelled instances is below the 0.95 bar: 45% of tests known to guard their fix are not reachable in this graph, so a skip would silently drop them
+
+  Recall 0.545 is the value measured for 'arm_b'-class graphs on the labelled corpus (n=44), not a measurement on src. An unlabelled repository cannot yield a recall figure; this is that class's prior, applied.
+
+  selected (first 10):
+    friction.gate::select_tests
+────────────────────────────────────────────────────────────────────

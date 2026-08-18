@@ -1,0 +1,2 @@
+$ friction verify
+VERIFY OK: shipped graphs re-audited (24/44, 15/30); corpus summary re-derived from per-instance rows; docs/README/site quote the artifact exactly.
