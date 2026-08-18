@@ -154,7 +154,12 @@ def longitudinal_rows():
 
 # ── diagrams ─────────────────────────────────────────────────────────────
 
+def _esc(s):
+    return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
 def box(x, y, w, h, label, sub="", stroke=LINE, fill=RAISED, fs=13):
+    label, sub = _esc(label), _esc(sub)
     s = (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}" '
          f'stroke="{stroke}"/>'
          f'<text x="{x+w/2}" y="{y+h/2-(7 if sub else 0)}" fill="{TEXT}" '

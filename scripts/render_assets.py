@@ -197,6 +197,86 @@ def png_assets() -> str:
     return "og.png + favicon.png written"
 
 
+def substrate_tree() -> str:
+    """Procedural pixel-tree in the engine's visual dialect — original art,
+    seeded and reproducible, with OUR measured numbers in the sampled-node
+    overlay (0.746 ceiling, 0.545 django, 0.419 pooled, 2.0 ms anti-join).
+    """
+    import math
+    import random
+
+    rng = random.Random(20260819)
+    W, H, CELL = 1600, 760, 11
+    cells: dict[tuple[int, int], float] = {}
+
+    def put(x, y, heat):
+        gx, gy = int(x // CELL), int(y // CELL)
+        if 0 <= gx * CELL < W and 0 <= gy * CELL < H:
+            cells[(gx, gy)] = max(cells.get((gx, gy), 0.0), heat)
+
+    def branch(x, y, ang, length, width, depth):
+        for step in range(length):
+            x += math.cos(ang) * CELL
+            y += math.sin(ang) * CELL
+            heat = max(0.12, 1.0 - depth * 0.16 + rng.uniform(-0.14, 0.22))
+            for _ in range(max(1, int(width))):
+                jx = rng.gauss(0, width * CELL * 0.5)
+                jy = rng.gauss(0, width * CELL * 0.35)
+                put(x + jx, y + jy, heat * rng.uniform(0.55, 1.0))
+            put(x, y, heat)
+            ang += rng.uniform(-0.055, 0.055)
+            if depth < 4 and rng.random() < (0.028 + depth * 0.008):
+                spread = rng.uniform(0.35, 0.95) * rng.choice((1, -1))
+                branch(x, y, ang + spread,
+                       int(length * rng.uniform(0.45, 0.75)),
+                       width * 0.6, depth + 1)
+
+    # trunk splits low, canopy leans right — the hydra silhouette
+    branch(430, H - 10, -math.pi / 2, 16, 3.4, 0)
+    branch(430, H - 170, -math.pi / 2 + 0.55, 46, 2.6, 1)
+    branch(430, H - 170, -math.pi / 2 - 0.45, 30, 2.4, 1)
+    branch(430, H - 300, -0.10, 96, 2.0, 1)          # long right limb
+    branch(430, H - 260, -math.pi / 2 - 1.05, 26, 1.8, 2)
+
+    palette = ["#5c130a", "#8a1f0d", "#b62c0f", "#d84012", "#ff571a",
+               "#ff8a4d", "#ffc38a", "#fff3e0"]
+    P = []
+    for (gx, gy), heat in cells.items():
+        c = palette[min(len(palette) - 1, int(heat * len(palette)))]
+        s = CELL - 3
+        P.append(f'<rect x="{gx*CELL}" y="{gy*CELL}" width="{s}" height="{s}" '
+                 f'fill="{c}"/>')
+
+    # sampled-node overlay: real numbers, dashed interconnects
+    nodes = [(1150, 430, "0.7460"), (1330, 330, "0.5455"),
+             (1470, 480, "0.4186"), (1250, 560, "2.0ms")]
+    for i, (x, y, _) in enumerate(nodes):
+        for x2, y2, _ in nodes[i + 1:]:
+            P.append(f'<line x1="{x}" y1="{y}" x2="{x2}" y2="{y2}" '
+                     f'stroke="#dadada" stroke-width="1" '
+                     f'stroke-dasharray="3 6" opacity="0.7"/>')
+    for x, y, val in nodes:
+        r = 34
+        P.append(f'<rect x="{x-r}" y="{y-r}" width="{2*r}" height="{2*r}" '
+                 f'fill="none" stroke="#ffffff" stroke-width="1.2"/>'
+                 f'<line x1="{x-r}" y1="{y-r}" x2="{x+r}" y2="{y+r}" '
+                 f'stroke="#ffffff" stroke-width="0.8" opacity="0.8"/>'
+                 f'<line x1="{x-r}" y1="{y+r}" x2="{x+r}" y2="{y-r}" '
+                 f'stroke="#ffffff" stroke-width="0.8" opacity="0.8"/>'
+                 f'<text x="{x}" y="{y+r+16}" fill="#ffffff" '
+                 f'font-family="{MONO}" font-size="12" '
+                 f'text-anchor="middle">{val}</text>')
+
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'viewBox="0 0 {W} {H}" role="img" aria-label="Decorative pixel '
+            f'tree in the engine\'s visual language; sampled nodes carry this '
+            f'project\'s measured numbers.">'
+            f'<rect width="{W}" height="{H}" fill="{BG}"/>'
+            + "".join(P) +
+            f'<line x1="0" y1="{H-2}" x2="{W}" y2="{H-2}" stroke="{ACCENT}" '
+            f'stroke-width="2"/></svg>')
+
+
 def main() -> None:
     PLOTS.mkdir(exist_ok=True)
     (PLOTS / "architecture.svg").write_text(architecture(), encoding="utf-8")
@@ -207,7 +287,10 @@ def main() -> None:
         budget_svg(json.loads(
             Path("data/shipped/budget-curves.json").read_text())),
         encoding="utf-8")
-    print("architecture.svg, hero-terminal.svg, budget-curves.svg written")
+    (PLOTS / "substrate-tree.svg").write_text(substrate_tree(),
+                                              encoding="utf-8")
+    print("architecture.svg, hero-terminal.svg, budget-curves.svg, "
+          "substrate-tree.svg written")
     print(png_assets())
 
 
