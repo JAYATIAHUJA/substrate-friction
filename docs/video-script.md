@@ -1,4 +1,4 @@
-# Video script — hard cap 3:00, target 2:40
+# Video script — hard cap 3:00, target 2:55
 
 ~400 words. One live terminal, one browser tab. Record the demo live; no stills.
 
@@ -19,7 +19,7 @@
 
 *Screen: the prune.png figure — 21 name-matched edges, 9 unconfirmed in red.*
 
-## 2. Project — 0:35–1:15
+## 2. Project — 0:35–1:27
 
 > So we measured the thing everyone assumes: can these graphs actually reach
 > the tests that guard a change? The label is free — SWE-bench's FAIL_TO_PASS
@@ -33,10 +33,15 @@
 > component of the graph. The bar for safely skipping is ninety-five percent.
 > Nothing is close, and upgrading the extractor moved paired recall by seven
 > points — the same precision-recall separation ICSE 2020 reported for Java.
+>
+> And we measured the ceiling at five moments across eight years of Django.
+> It never moved — 0.75 in 2017, 0.75 today, while the graph grew forty
+> percent. That's the third hypothesis we've falsified against ourselves.
+> This isn't decay you outgrow; it's a constant of the technique.
 
 *Screen: the recall table from docs/gate.md.*
 
-## 3. Demo — 1:15–2:20
+## 3. Demo — 1:27–2:25
 
 *Terminal, live:*
 
@@ -60,7 +65,7 @@ friction gate --repo . --changed src/friction/gate.py
 > stated prior, because an unlabelled repo can't yield a recall figure and we
 > won't pretend otherwise. Agents get the same answer over MCP.
 
-## 4. HydraDB — 2:20–2:50
+## 4. HydraDB — 2:25–2:55
 
 > Both graphs live in one HydraDB engine in disjoint id bands. The walk runs
 > in-engine — and we learned the engine's rules by measurement: count(*) works

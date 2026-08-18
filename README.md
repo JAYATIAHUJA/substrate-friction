@@ -21,8 +21,9 @@ SWE-bench's `FAIL_TO_PASS` test *is* the test that guards the fix.
 *A real capture — the engine itself proves the miss. Source: `docs/captures/03-live-parity.txt`; rendered by `scripts/render_assets.py`.*
 
 **Guarding-test recall: 0.545 on django (n=44), 0.419 pooled across 7 repos
-(n=172) — the per-repo spread is the finding, not an inconsistency.** Every
-figure names its scope; every figure is emitted by a committed script.
+(n=172) — the per-repo spread is the finding, not an inconsistency — and the
+underlying precision ceiling is flat across eight years of django (S5).**
+Every figure names its scope; every figure is emitted by a committed script.
 
 **Site:** [areycruzer.github.io/substrate-friction](https://areycruzer.github.io/substrate-friction) · **Full report:** [`docs/gate.md`](docs/gate.md)
 

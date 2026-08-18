@@ -217,8 +217,8 @@ dropped guarding test. <a href="https://github.com/areycruzer/substrate-friction
 <section id="stats"><div class="wrap">
 <div class="stats">
 <div class="stat"><div class="v"><span data-count="0.746">0.746</span></div>
-<div class="l">name-match precision — a ceiling, not a point
-(docs/graph-delta.md)</div></div>
+<div class="l">name-match precision ceiling — flat across 8 years of
+django (docs/graph-delta.md · docs/longitudinal.md S5)</div></div>
 <div class="stat"><div class="v"><span data-count="{NUMS['django_b_recall']}" data-num="django_b_recall">{NUMS['django_b_recall']}</span></div>
 <div class="l">guarding-test recall, type-resolved, django
 ({n('django_b_ratio')})</div></div>
