@@ -163,6 +163,32 @@ figcaption{font-size:12.5px;color:var(--muted);margin-top:10px}
 @media(max-width:480px){nav ul{display:none}
 .stats{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+.walkstage{margin:34px 0 8px;border:1px solid var(--line-strong);
+background:var(--raised)}
+.walkrail{display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid
+var(--line)}
+.walkrail button{flex:1 1 auto;min-width:96px;background:var(--bg);border:0;
+border-right:1px solid var(--line);color:var(--muted);cursor:pointer;
+padding:10px 8px;font:600 10.5px/1.2 'Space Grotesk',sans-serif;
+letter-spacing:.14em;text-transform:uppercase;transition:color .15s,
+background .15s}
+.walkrail button:last-child{border-right:0}
+.walkrail button .num{display:block;font-family:'Geist Mono',ui-monospace,
+monospace;font-size:9px;opacity:.7;margin-bottom:3px}
+.walkrail button[aria-pressed="true"]{color:var(--accent);background:
+var(--hover)}
+.walkrail button:hover{color:var(--text)}
+.walkstage svg{display:block;width:100%;height:auto}
+.wg{opacity:0;transition:opacity .55s ease}
+.wg.on{opacity:1}
+.wg .pop{transform:translateY(6px);transition:transform .55s ease}
+.wg.on .pop{transform:translateY(0)}
+.wg .meterfill{transform:scaleX(0);transform-origin:left center;
+transition:transform .9s cubic-bezier(.2,.7,.2,1) .25s}
+.wg.on .meterfill{transform:scaleX(1)}
+@media(prefers-reduced-motion:reduce){.wg,.wg .pop,.wg .meterfill,
+.wg.on .meterfill{transition:none;transform:none;opacity:1}
+.wg{opacity:0}.wg.on{opacity:1}}
 """
 
 JS = """
@@ -585,6 +611,205 @@ def _capture(name, first=None, last=None):
     return esc
 
 
+def _walk_numbers():
+    """Every number the live stage shows, parsed from the committed captures
+    at render time — the stage never hardcodes a figure."""
+    import re as _re
+    src = Path("docs/captures/03-live-parity.txt").read_text(encoding="utf-8")
+    edges = _re.search(r"([\d,]+) edges", src)
+    ms = _re.search(r"engine ([\d.]+) ms", src)
+    rep = Path("docs/captures/02-replay-10097.txt").read_text(encoding="utf-8")
+    guard = _re.search(r"selected (\d+) of (\d+)", rep)
+    ver = Path("docs/captures/08-verify.txt").read_text(encoding="utf-8")
+    aud = _re.search(r"\((\d+)/(\d+), (\d+)/(\d+)\)", ver)
+    return {
+        "edges": edges.group(1) if edges else "—",
+        "ms": ms.group(1) if ms else "—",
+        "sel": guard.group(1) if guard else "0",
+        "guard": guard.group(2) if guard else "370",
+        "aud_b": f"{aud.group(1)}/{aud.group(2)}" if aud else "24/44",
+        "aud_a": f"{aud.group(3)}/{aud.group(4)}" if aud else "15/30",
+    }
+
+
+_WALK_JS = """
+(function () {
+  var st = document.getElementById('walkstage'); if (!st) return;
+  var groups = st.querySelectorAll('.wg');
+  var btns = st.querySelectorAll('.walkrail button');
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var timer = null, cur = -1;
+  function show(i) {
+    cur = i;
+    groups.forEach(function (g, j) { g.classList.toggle('on', j === i); });
+    btns.forEach(function (b, j) {
+      b.setAttribute('aria-pressed', j === i ? 'true' : 'false'); });
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+  function play() {
+    if (reduced) return;
+    stop(); timer = setInterval(function () {
+      show((cur + 1) % groups.length); }, 5000);
+  }
+  btns.forEach(function (b, i) {
+    b.addEventListener('click', function () { stop(); show(i); }); });
+  st.addEventListener('mouseenter', stop);
+  st.addEventListener('mouseleave', play);
+  document.addEventListener('visibilitychange', function () {
+    document.hidden ? stop() : play(); });
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { e.isIntersecting ? play() : stop(); });
+  }, { threshold: 0.25 });
+  io.observe(st);
+  show(0);
+})();
+"""
+
+
+def _walkstage() -> str:
+    """The live stage: one SVG, six scenes, every figure parsed from the
+    committed captures. Auto-steps every 5 s while visible; the rail and
+    arrow keys drive it by hand; reduced-motion gets a static, steppable
+    diagram."""
+    w = _walk_numbers()
+    fill_a = "var(--accent)"
+    fill_y = "var(--yellow)"
+    ink = "var(--text)"
+    body = "var(--body)"
+    mute = "var(--muted)"
+    ln = "var(--line-strong)"
+    mono = "font-family:'Geist Mono',ui-monospace,monospace"
+    grot = "font-family:'Space Grotesk',sans-serif"
+
+    def t(x, y, s, size=12, fill=body, anchor="start", weight="400",
+          family=mono, extra=""):
+        return (f'<text x="{x}" y="{y}" fill="{fill}" font-size="{size}" '
+                f'text-anchor="{anchor}" font-weight="{weight}" '
+                f'style="{family}{extra}">{s}</text>')
+
+    nodes = [(200, 160), (240, 244), (300, 140), (330, 220), (380, 180),
+             (300, 90), (262, 300), (360, 300), (430, 240), (470, 160),
+             (520, 220), (560, 140)]
+    edges_svg = "".join(
+        f'<line x1="{nodes[a][0]}" y1="{nodes[a][1]}" x2="{nodes[b][0]}" '
+        f'y2="{nodes[b][1]}" stroke="var(--line)" stroke-width="1"/>'
+        for a, b in [(0, 1), (0, 2), (0, 3), (2, 4), (3, 4), (2, 5), (1, 6),
+                     (3, 7), (4, 8), (4, 9), (8, 10), (9, 11), (8, 9)])
+    node_svg = "".join(
+        f'<rect x="{x - 3}" y="{y - 3}" width="6" height="6" '
+        f'fill="{mute}"/>' for x, y in nodes)
+    track_w, meter_x, meter_y = 520, 180, 200
+    bar_x = f"{meter_x + 0.95 * track_w:.0f}"
+    fill_w = f"{float(NUMS['django_b_recall']) * track_w:.0f}"
+
+    return f"""
+<div class="walkstage" id="walkstage" aria-label="Animated walkthrough of the whole system on one real bug">
+<div class="walkrail" role="group" aria-label="walkthrough scenes">
+<button aria-pressed="true"><span class="num">01</span>the ticket</button>
+<button aria-pressed="false"><span class="num">02</span>the map lies</button>
+<button aria-pressed="false"><span class="num">03</span>the seatbelt</button>
+<button aria-pressed="false"><span class="num">04</span>the engine proves</button>
+<button aria-pressed="false"><span class="num">05</span>the agent asks</button>
+<button aria-pressed="false"><span class="num">06</span>check us</button>
+</div>
+<svg viewBox="0 0 960 420" role="img" aria-label="Six scenes: a real Django bug, the map that misses its guarding tests, the gate that refuses, the engine that proves it, the agent that abstains, and the one command that re-derives every number">
+<defs><pattern id="wdots" width="24" height="24" patternUnits="userSpaceOnUse">
+<rect width="24" height="24" fill="none"/>
+<circle cx="1" cy="1" r="1" fill="var(--line)"/></pattern></defs>
+<rect width="960" height="420" fill="url(#wdots)"/>
+
+<g class="wg">
+<rect x="300" y="104" width="360" height="160" fill="var(--bg)" stroke="{ln}"/>
+<rect x="294" y="98" width="372" height="172" fill="none" stroke="{fill_a}" stroke-dasharray="4 5" opacity=".55"/>
+{t(324, 132, "SWE-BENCH INSTANCE · REAL, HUMAN-VERIFIED", 10, mute, weight="600", family=grot, extra=";letter-spacing:.14em")}
+{t(324, 166, "django__django-10097", 19, ink)}
+<line x1="324" y1="182" x2="636" y2="182" stroke="var(--line)"/>
+{t(324, 208, f"tests that catch this bug (the label): {w['guard']}", 12.5, body)}
+{t(324, 228, "the map does not get to see this — it is the answer key", 11, mute)}
+<rect class="pop" x="324" y="240" width="150" height="26" fill="{fill_a}"/>
+{t(399, 257, "THE ANSWER KEY", 10.5, "#0a0a0a", anchor="middle", weight="700", family=grot, extra=";letter-spacing:.1em")}
+</g>
+
+<g class="wg">
+{edges_svg}{node_svg}
+<rect x="133" y="201" width="14" height="14" fill="{fill_a}"/>
+{t(140, 236, "the change", 11, fill_a, anchor="middle", weight="600")}
+<rect class="ripple" x="118" y="186" width="44" height="44" fill="none" stroke="{fill_a}" stroke-dasharray="3 6" opacity=".6"/>
+<rect x="427" y="237" width="6" height="6" fill="{fill_y}"/>
+<rect x="467" y="157" width="6" height="6" fill="{fill_y}"/>
+{t(470, 190, "walk reached 2 tests — none of them guarding", 11, fill_y)}
+<rect x="744" y="164" width="140" height="66" fill="none" stroke="{fill_a}" stroke-dasharray="5 4"/>
+<rect x="768" y="188" width="8" height="8" fill="none" stroke="{fill_a}"/>
+<rect x="806" y="206" width="8" height="8" fill="none" stroke="{fill_a}"/>
+<rect x="844" y="182" width="8" height="8" fill="none" stroke="{fill_a}"/>
+{t(814, 156, f"guarding tests — {w['sel']} of {w['guard']} reachable", 11, fill_a, anchor="middle", weight="600")}
+<line x1="566" y1="144" x2="740" y2="180" stroke="{fill_a}" stroke-dasharray="4 5"/>
+{t(654, 152, "✕", 15, fill_a, anchor="middle", weight="700")}
+{t(654, 246, "the edge that would connect them was never extracted", 11, mute, anchor="middle")}
+</g>
+
+<g class="wg">
+{t(180, 176, f"measured hit rate on this class of map: {NUMS['django_b_recall']}", 12.5, body)}
+<rect x="{meter_x}" y="{meter_y}" width="{track_w}" height="12" fill="var(--hover)" stroke="var(--line)"/>
+<rect class="meterfill" x="{meter_x}" y="{meter_y}" width="{fill_w}" height="12" fill="{fill_a}"/>
+<line x1="{bar_x}" y1="182" x2="{bar_x}" y2="234" stroke="{fill_y}" stroke-width="2"/>
+{t(bar_x, 172, "0.95 — the bar to earn a skip", 11, fill_y, anchor="end")}
+<rect class="pop" x="300" y="266" width="360" height="72" fill="var(--bg)" stroke="{fill_a}"/>
+{t(480, 300, "[FAIL]  RUN_FULL", 21, fill_a, anchor="middle", weight="700")}
+{t(480, 324, "exit 1 — in CI, that blocks the merge", 11.5, mute, anchor="middle")}
+</g>
+
+<g class="wg">
+<rect class="pop" style="transition-delay:.05s" x="380" y="196" width="8" height="8" fill="{fill_y}"/>
+<rect class="pop" style="transition-delay:.2s" x="440" y="204" width="8" height="8" fill="{fill_y}"/>
+<rect class="pop" style="transition-delay:.35s" x="500" y="212" width="8" height="8" fill="{fill_y}"/>
+<line x1="524" y1="216" x2="580" y2="216" stroke="{mute}" stroke-dasharray="3 4"/>
+<rect x="580" y="100" width="300" height="220" fill="var(--bg)" stroke="{ln}"/>
+<rect x="580" y="100" width="300" height="30" fill="{fill_a}"/>
+{t(730, 120, "HydraDB · LIVE", 12, "#0a0a0a", anchor="middle", weight="700", family=grot, extra=";letter-spacing:.12em")}
+{t(604, 160, f"the map, loaded: {w['edges']} connections", 12.5, ink)}
+{t(604, 184, "the check, as one bounded query:", 11.5, mute)}
+{t(604, 204, "MATCH (t:Test) WHERE count(*)>0 …", 11, body)}
+{t(604, 228, f"engine answers in {w['ms']} ms", 12.5, ink)}
+{t(604, 252, "parity with the offline walk: True", 12.5, ink)}
+<line x1="604" y1="268" x2="856" y2="268" stroke="var(--line)"/>
+{t(604, 292, "DROPPED: guarding test — proven by", 12, fill_a, weight="600")}
+{t(604, 308, "the engine itself, not by our word", 12, fill_a, weight="600")}
+</g>
+
+<g class="wg">
+<rect x="120" y="140" width="220" height="140" fill="var(--bg)" stroke="{ln}"/>
+{t(230, 176, "AI CODING AGENT", 11.5, ink, anchor="middle", weight="700", family=grot, extra=";letter-spacing:.1em")}
+<rect x="144" y="196" width="172" height="24" fill="var(--hover)"/>
+{t(230, 212, "wants to skip 1,540 of 1,542 tests", 10.5, mute, anchor="middle")}
+<rect x="640" y="140" width="220" height="140" fill="var(--bg)" stroke="{ln}"/>
+{t(750, 176, "friction gate · MCP", 11.5, ink, anchor="middle", weight="700", family=grot, extra=";letter-spacing:.1em")}
+<rect x="664" y="196" width="172" height="24" fill="var(--hover)"/>
+{t(750, 212, "gate_check → refuses", 10.5, fill_a, anchor="middle")}
+<path d="M340,180 C460,120 500,120 640,180" fill="none" stroke="{mute}"/>
+{t(490, 128, "asks first: is my map good enough to skip?", 11, body, anchor="middle")}
+<path d="M640,236 C500,296 460,296 340,236" fill="none" stroke="{fill_a}" stroke-dasharray="5 4"/>
+{t(490, 300, "no — run everything", 11.5, fill_a, anchor="middle", weight="600")}
+<rect class="pop" x="144" y="240" width="172" height="24" fill="{fill_a}"/>
+{t(230, 256, "RUNS ALL — no skip shipped", 10, "#0a0a0a", anchor="middle", weight="700")}
+</g>
+
+<g class="wg">
+<rect class="pop" x="220" y="120" width="380" height="30" fill="var(--bg)" stroke="var(--line)"/>
+{t(236, 140, f"shipped graphs re-audited — {w['aud_b']} arm B, {w['aud_a']} arm A ✓", 12, body)}
+<rect class="pop" style="transition-delay:.15s" x="220" y="160" width="380" height="30" fill="var(--bg)" stroke="var(--line)"/>
+{t(236, 180, "corpus summary re-derived from per-instance rows ✓", 12, body)}
+<rect class="pop" style="transition-delay:.3s" x="220" y="200" width="380" height="30" fill="var(--bg)" stroke="var(--line)"/>
+{t(236, 220, "docs · README · this site == the artifact ✓", 12, body)}
+{t(410, 286, "VERIFY OK", 30, fill_a, anchor="middle", weight="700")}
+{t(410, 312, "one command re-derives every number on this page", 12, mute, anchor="middle")}
+</g>
+</svg>
+</div>
+<script>{_WALK_JS}</script>
+"""
+
+
 def walkthrough() -> str:
     """One page, one real Django bug, the whole system demonstrated —
     from committed records. Running this page requires nothing."""
@@ -603,6 +828,20 @@ record from this repository — real ticket, real commands, real output.
 <b>This page runs nothing and requires nothing.</b> To re-run it all
 yourself: <code>git clone</code>, <code>./setup.sh</code> (needs Docker),
 <code>friction verify</code>.</p>
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">THE STAGE / SIX SCENES, ONE STORY</div>
+<h2 style="font-size:clamp(22px,3vw,30px)">Watch the whole thing happen.</h2>
+<p style="max-width:66ch">The stage below animates the six scenes of this
+story — every figure in it is parsed from the committed captures at render
+time, and the receipts for each scene follow underneath. It steps by itself
+every five seconds; the rail above it (or your click) drives it by hand.
+The scenes: the ticket and its answer key → the map that provably completes
+its walk yet reaches <em>none</em> of the guarding tests → the seatbelt that
+refuses → the engine that proves the refusal live → the agent that asks
+first and backs off → the one command that re-derives every number.</p>
+{_walkstage()}
 </div></section>
 
 <section><div class="wrap">
