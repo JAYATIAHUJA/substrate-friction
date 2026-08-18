@@ -20,3 +20,9 @@ now the 172-instance corpus (0.419 type-resolved, 0.314 name-matched), the
 per-repo spread line replaces the django-only line, and shot 5 (engine diff)
 replaces the second terminal beat. All quoted numbers exist in
 `data/shipped/gate-results.json` and `docs/engine-diff.md`.
+
+**Beat 2b narration (~12 s, verbatim):** "We measured the ceiling at five
+moments across eight years of Django. It never moved — 0.75 in 2017, 0.75
+today, while the graph grew forty percent. That's the third hypothesis we've
+falsified against ourselves. This isn't decay you outgrow; it's a constant of
+the technique."
