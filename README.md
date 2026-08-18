@@ -336,12 +336,14 @@ corrections are reported, never silently replaced.
 
 ## Limitations
 
-- **The CI engine job is disclosed as failing** — the pinned engine bootstraps
-  cleanly on macOS but dies with `IsADirectory` on the runner FS (filed
-  upstream as [#101](https://github.com/hydra-db/hydradb/issues/101)); the
-  badge covers the `tests` job (the full pytest suite + the gate verdict
-  reproduced in CI), and the Bolt round trip is proven locally
-  (`scripts/hydra_proof.py`).
+- **The engine CI job was red for a day, and the story is kept** — we
+  mis-attributed it to a runner-filesystem bug, filed it upstream, then found
+  the real cause by strace: our own gitignored `secrets/token` (Docker
+  bind-mounts a missing path as a *directory*). We retracted the wrong
+  conclusion on the issue itself, retitled it to the residual diagnosability
+  ask, and the job is now **green on the runner** — boot, Bolt round trip,
+  wipe-and-restart, full engine test suite
+  ([#101](https://github.com/hydra-db/hydradb/issues/101)).
 - **Precision is a ceiling** (arm B under-reports on untyped receivers), and
   the same property means arm B is a type-resolved *reference*, not ground
   truth — see study S2 for its own audited misses.
@@ -384,7 +386,7 @@ Four contributions to `github.com/hydra-db/hydradb`, surfaced by this project:
 
 - **[Issue #81](https://github.com/hydra-db/hydradb/issues/81)** — manifest GC fails under the documented `CLOUD_PROVIDER=local`: after enough sustained writes every write fails permanently while reads keep serving, so a read-only health check reports the node healthy while it is silently write-dead.
 - **[PR #82](https://github.com/hydra-db/hydradb/pull/82)** — cypher-compatibility docs covering 7 measured behaviours of the pinned build (inlined-literal set queries, `count(*)` vs rejected `count(n)`, `SSpaths` integer `sourceNode`, and the rest).
-- **[Issue #101](https://github.com/hydra-db/hydradb/issues/101)** — fresh-store bootstrap fails on Linux CI runners (`IsADirectory`) while identical config bootstraps on macOS; the documented cause of this repo's disclosed-red engine CI job, with a public repro workflow.
+- **[Issue #101](https://github.com/hydra-db/hydradb/issues/101)** — startup exits with a raw `Os {NotFound}/{IsADirectory}` when the auth-token file is missing or a directory; originally mis-filed as a runner-FS bootstrap bug, corrected on-thread after strace found the real cause (our gitignored secrets file), and retitled to the diagnosability ask: name the attempted path in the error.
 - **[Issue #102](https://github.com/hydra-db/hydradb/issues/102)** — proposal for an `algo.RecallCert` procedure: in-engine certification of a selection result against labels, with `friction gate` as the motivating consumer.
 
 ## Attribution

@@ -23,7 +23,7 @@ foreach ($i in 1..60) {
   Start-Sleep -Seconds 1
 }
 if (-not $ok) {
-  Write-Warning "engine not reachable — note upstream issue hydra-db/hydradb#101: the pinned image fails to cold-start on some non-macOS filesystems. Cache-backed commands (friction gate / verify / compare) work without it."
+  Write-Warning "engine not reachable — ensure secrets/token exists (32-byte local dev token; see docker-compose.yml). Cache-backed commands (friction gate / verify / compare) work without the engine."
 }
 uv run friction gate --arm arm_b
 Write-Host "setup complete. Try: uv run friction verify"
