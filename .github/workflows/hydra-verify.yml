@@ -51,10 +51,9 @@ jobs:
           path: /tmp/gate.md
 
   engine:
-    name: engine round trip (fresh-store bootstrap fails on the runner FS; proven locally)
+    name: engine round trip (live HydraDB on the runner)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -67,13 +66,14 @@ jobs:
         run: uv sync --extra dev
 
       - name: Start pinned HydraDB
-        # The engine bootstraps a fresh store cleanly on macOS/Docker Desktop
-        # but dies with `IsADirectory` on the runner's filesystem. Recorded
-        # honestly rather than masked: this job is allowed to fail, the badge
-        # reflects the `tests` job, and the round-trip proof
-        # (scripts/hydra_proof.py) is reproduced locally against the pinned
-        # engine. Wipe-and-restart discipline per issue #81 either way.
+        # Root cause of the old red job, found by strace and corrected in
+        # hydradb#101: compose mounts the gitignored ./secrets/token, a CI
+        # checkout lacks it, and Docker bind-mounts the missing path as a
+        # DIRECTORY — the engine then dies reading its auth token with a raw
+        # IsADirectory. Fix: provision the local-dev token before compose up.
+        # Wipe-and-restart discipline per issue #81 unchanged.
         run: |
+          mkdir -p secrets && printf 'local-development-token-32-bytes' > secrets/token
           mkdir -p hydradb-data/graph minio-data
           sudo chown -R 10001:10001 hydradb-data && chmod -R 777 minio-data
           docker compose up -d
@@ -96,7 +96,14 @@ jobs:
           sudo rm -rf hydradb-data
           mkdir -p hydradb-data/graph && sudo chown -R 10001:10001 hydradb-data
           docker compose up -d
-          sleep 20
+          for i in $(seq 1 60); do
+            if uv run python -c "
+          from friction.client import connect
+          from friction.config import Settings
+          connect(Settings.from_env(), prefer='bolt').close()
+          " 2>/dev/null; then echo "clean store up after ${i}s"; break; fi
+            sleep 1
+          done
 
       - name: Engine-marked tests against a clean store
         run: uv run pytest -q -m engine
