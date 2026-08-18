@@ -153,6 +153,10 @@ details.walkterm[open] summary::before{transform:rotate(90deg)}
 details.walkterm summary .hint{margin-left:auto;color:var(--muted);
 font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}
 details.walkterm pre{background:var(--raised);padding:16px 18px;overflow-x:auto;
+--cA:#ff571a;--cY:#f9c425;--cD:#4d4d4d;--cF:#9a9a9a}
+.walkterm pre .tA{color:var(--accent)}.walkterm pre .tY{color:var(--yellow)}
+.walkterm pre .tD{color:#4d4d4d}.walkterm pre .tF{color:#9a9a9a}
+.walkterm pre b{font-weight:700}
 font-family:'Geist Mono',ui-monospace,monospace;font-size:12.5px;
 line-height:1.55;color:var(--body)}
 .walkver{flex:0 0 auto;display:flex;align-items:center;padding:0 14px;
@@ -613,6 +617,68 @@ NOTFOUND = HEAD + NAV.join(["<body>", ""]) + """
 </body></html>"""
 
 
+import re as _ansi_re
+_ANSI_SGR = _ansi_re.compile(r"\x1b\[([0-9;]*)m")
+_TUI_COLORS = {"208": "tA", "220": "tY", "240": "tD", "245": "tF"}
+
+
+def _esc(text: str) -> str:
+    return (text.replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;"))
+
+
+def _ansi_line_html(line: str) -> str:
+    """Render one ANSI line as coloured spans (the TUI's own palette)."""
+    segs, buf, cur = [], "", {"c": None, "b": False}
+    pos = 0
+    for m in _ANSI_SGR.finditer(line):
+        buf += line[pos:m.start()]
+        if buf:
+            segs.append((buf, cur["c"], cur["b"]))
+            buf = ""
+        i, parts = 0, m.group(1).split(";")
+        while i < len(parts):
+            q = parts[i]
+            if q == "0":
+                cur = {"c": None, "b": False}
+            elif q == "1":
+                cur["b"] = True
+            elif q == "38" and i + 2 < len(parts) and parts[i + 1] == "5":
+                cls = _TUI_COLORS.get(parts[i + 2])
+                if cls:
+                    cur["c"] = cls
+                i += 2
+            i += 1
+        pos = m.end()
+    buf += line[pos:]
+    if buf:
+        segs.append((buf, cur["c"], cur["b"]))
+    out = []
+    for text, cls, bold in segs or [("", None, False)]:
+        h = _esc(text)
+        if bold:
+            h = f"<b>{h}</b>"
+        if cls:
+            h = f'<span class="{cls}">{h}</span>'
+        out.append(h)
+    return "".join(out)
+
+
+def _capture_painted(name: str) -> str:
+    """A capture rendered for the receipts: ANSI-styled when the record has
+    it (the current TUI), plain-escaped when it does not (MCP transcripts)."""
+    raw = Path(f"docs/captures/{name}").read_text(encoding="utf-8")
+    if "\x1b" not in raw:
+        return "\n".join(_esc(l) for l in raw.split("\n"))
+    lines = []
+    for l in raw.split("\n"):
+        if l.startswith("$ "):
+            lines.append(f'<span class="tA"><b>${_esc(l[2:])}</b></span>')
+        else:
+            lines.append(_ansi_line_html(l))
+    return "\n".join(lines)
+
+
 def _capture(name, first=None, last=None):
     """Read a committed terminal capture and return escaped HTML lines."""
     lines = Path(f"docs/captures/{name}").read_text(
@@ -829,10 +895,10 @@ def walkthrough() -> str:
     """One page, one real Django bug, the whole system demonstrated —
     from committed records. Running this page requires nothing."""
 
-    def term(name, cap):
+    def term(name, cap_file):
         return (f'<details class="walkterm"><summary><span>{name}</span>'
                 f'<span class="hint">receipt · verbatim · click</span>'
-                f'</summary><pre>{cap}</pre></details>')
+                f'</summary><pre>{_capture_painted(cap_file)}</pre></details>')
 
     steps = f"""
 <section><div class="wrap">
@@ -878,7 +944,7 @@ lets us grade the machines.</p>
 tests. The walk finishes. The map says: <em>done, checked everything.</em>
 Here is that exact replay:</p>
 {term("friction gate --instance django__django-10097",
-      _capture("02-replay-10097.txt"))}
+      "12-tui-replay.txt")}
 <p style="max-width:66ch"><b>Zero of the 370 bug-catching tests were
 selected — and the walk was provably complete.</b> The map was perfectly
 drawn and still missing the roads that mattered. Without a seatbelt, this
@@ -892,7 +958,7 @@ bug ships, silently.</p>
 asks: <em>has this class of map been proven good?</em> Measured over 172
 real bugs, its hit rate is 0.545 on Django and 0.419 pooled — far below the
 0.95 bar. Verdict, with exit code 1 (in CI, that blocks the merge):</p>
-{term("friction gate --arm arm_b", _capture("01-gate-verdict.txt"))}
+{term("friction gate --arm arm_b", "11-tui-gate.txt")}
 </div></section>
 
 <section><div class="wrap">
@@ -904,7 +970,7 @@ in 2.6 milliseconds, matching our offline answer exactly — and naming the
 dropped test. (This live run uses instance
 <code>django__django-11551</code>, chosen for load size.)</p>
 {term("friction gate --instance django__django-11551 --live",
-      _capture("03-live-parity.txt"))}
+      "13-tui-live.txt")}
 </div></section>
 
 <section><div class="wrap">
@@ -915,7 +981,7 @@ OpenHands speak — a real client session asks the gate before trusting its
 own map. The decision rule here is a scripted, disclosed policy; the
 transport, the server and the verdict are real:</p>
 {term("scripts/abstention_demo.py — MCP session",
-      _capture("07-abstention.txt"))}
+      "14-tui-abstention.txt")}
 </div></section>
 
 <section><div class="wrap">
@@ -924,7 +990,7 @@ transport, the server and the verdict are real:</p>
 <p style="max-width:66ch">Every figure on this site is regenerated from one
 committed artifact, and <code>friction verify</code> re-checks the whole
 chain — the shipped graphs, the summary, the README, this site:</p>
-{term("friction verify", _capture("08-verify.txt"))}
+{term("friction verify", "15-tui-verify.txt")}
 <p style="max-width:66ch">The deep story — how the maps were measured, the
 five pre-registered studies, three falsified hypotheses, three kept
 retractions — is on the <a href="index.html">main page</a> and in the

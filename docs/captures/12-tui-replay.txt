@@ -1,0 +1,26 @@
+$ friction gate --instance django__django-10097
+[38;5;240m────────────────────────────────────────────────────────────────────[0m
+[38;5;208;1m  django__django-10097[0m
+[38;5;240m────────────────────────────────────────────────────────────────────[0m
+  arm          : arm_b (type-resolved)
+  base commit  : b9cf764be62e
+  graph        : 26,848 nodes, 58,006 edges
+
+  changed symbols (fix sites)       : 1
+  tests that guard the fix (label)  : 370   <- SWE-bench FAIL_TO_PASS
+  tests the selector returns        : 0
+  walk was graph-complete           : True
+
+[38;5;208;1m  NOT SELECTED — 370 guarding test node(s) are unreachable[0m
+  from the change within 6 hops. A tool that skipped on
+  this graph would not have run them.
+    node ids: [20000010295, 20000010296, 20000010297, 20000010298, 20000010301, 20000010302, 20000010471, 20000010476] …
+
+  The walk exhausted its frontier: it is complete with respect to the
+  edges this graph has. The guarding test is missing because the edge
+  connecting it was never extracted — and no completeness check on a
+  graph can see an edge that is not in it.
+
+  the query, in the engine:
+    MATCH (s {id: 20000003779})-[:CALLED_BY*1..6]->(n) RETURN n.id AS id
+[38;5;240m────────────────────────────────────────────────────────────────────[0m
