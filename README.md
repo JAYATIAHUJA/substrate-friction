@@ -7,15 +7,30 @@
 
 **Before your tool skips a test, measure the graph it trusted.**
 
-Graph-based test selection is a good idea: build a call graph, walk backwards
-from the change, run the tests it reaches, skip the rest. It is also unsafe in a
-way that is invisible from inside the tool — the walk can be provably complete
-with respect to the graph while the graph is missing the edge that mattered.
-**An extractor cannot fail-closed on an edge it never knew existed.**
+> *Everyone is trying to make coding agents smarter. Nobody is asking the
+> cheaper question.* — this project's founding brief
+> ([`docs/origin/`](docs/ORIGIN.md)), which set out to predict **where agents
+> fail** and route those tickets to humans. The prediction died by its own
+> pre-registered protocol. The autopsy found something better: **the ground
+> under every agent was never load-bearing — and nobody had weighed it.**
 
-`friction gate` measures the thing that is load-bearing: **what fraction of
-tests known to guard a fix does this graph let you reach?** The label is free —
-SWE-bench's `FAIL_TO_PASS` test *is* the test that guards the fix.
+Graph-based test selection is a good idea: build a call graph, walk backwards
+from the change, run the tests it reaches, skip the rest. It is also unsafe in
+a way that is invisible from inside the tool — the walk can be provably
+complete with respect to the **graph** while the graph is missing the edge
+that mattered in the **program**. The map is not the territory; we measured
+the gap. **An extractor cannot fail-closed on an edge it never knew existed —
+so we built the thing that can.**
+
+`friction gate` is the founding brief's triage gate, one level deeper. The
+brief asked *"which tickets should we not give the robot?"* — the gate asks
+the question under that question: **which graphs should the robot not trust?**
+It measures the load-bearing number — what fraction of tests known to guard a
+fix does this graph let you reach? — and its `RUN_FULL` verdict is the same
+move the brief called *"route to human"*: when the evidence is thin, abstain.
+The label is free — SWE-bench's `FAIL_TO_PASS` test *is* the test that guards
+the fix. Friction, as it turns out, was real all along: it is **what the
+substrate charges you before the agent even starts.**
 
 ![friction gate --live: the engine loads the graph, executes the selection in 2.6 ms, agrees exactly with the offline walk, and proves the dropped guarding test](docs/plots/hero-terminal.svg)
 *A real capture — the engine itself proves the miss. Source: `docs/captures/03-live-parity.txt`; rendered by `scripts/render_assets.py`.*
@@ -30,6 +45,17 @@ Every figure names its scope; every figure is emitted by a committed script.
 ---
 
 ## What it is
+
+**Origin → now, in one table** (the long version is
+[`docs/ORIGIN.md`](docs/ORIGIN.md); the founding brief is committed verbatim):
+
+| | The original bet (Aug 12) | What shipped (and why it is stronger) |
+|---|---|---|
+| Question | Will the *agent* fail this ticket? | Can the *graph* reach the tests that guard this change? |
+| Answerable from a graph? | No — held-out AUC **0.483**, at/below chance | Yes — deterministic: it reaches or it does not |
+| Verdict | "route to human" (predicted, probabilistic) | `RUN_FULL`, exit 1 (measured, fail-closed) |
+| Fate of the metric | six "friction" components, retracted twice | one recall number, negative-controlled 0.545→0.000 |
+| What survived | the *instinct* — abstain when evidence is thin | the instinct, with a measurement under it |
 
 Take one SWE-bench ticket. To reason about it structurally you first need a
 call graph, and *how you build that graph* is a choice with consequences nobody

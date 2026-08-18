@@ -31,10 +31,12 @@
 <div>
 <div class="micro">01 / TEST SELECTION SAFETY</div>
 <h1>Before your tool skips a test, measure the graph it trusted.</h1>
-<p>Coding agents build a graph of your repository by matching names, then
-skip tests based on it. <code>friction gate</code> prices that graph against
-labelled ground truth before anything skips on it — and refuses when the
-evidence is thin.</p>
+<p>Born as a pre-flight check for AI coding agents — <em>which tickets do
+we not give the robot?</em> — and reforged one level deeper: <em>which graphs
+should the robot not trust?</em> <code>friction gate</code> weighs the graph
+under your agent against labelled ground truth before anything skips on it,
+and refuses when the evidence is thin. Friction is what the substrate charges
+you before the agent even starts.</p>
 <a class="btn primary" href="https://github.com/areycruzer/substrate-friction#quickstart">Run the gate</a>
 <a class="btn" href="https://github.com/areycruzer/substrate-friction/blob/main/docs/gate.md">Read the measurement</a>
 <div class="chips">
@@ -189,6 +191,13 @@ Java.</p></details>
 <p>No, and the docs say so: those studies measure single-edge presence; this
 measures bounded transitive reachability of a labelled pair — a harder
 relation.</p></details>
+<details><summary>What happened to predicting agent failure?</summary>
+<p>That was the founding bet — a triage gate routing hard tickets to humans.
+It died by its own pre-registered protocol (held-out AUC 0.483, at or below
+chance) and is published in full. The gate is that idea one level deeper: the
+verdict moved from a probabilistic guess about the agent to a measured fact
+about the graph, and "route to human" became RUN_FULL — same abstention, real
+evidence. See docs/ORIGIN.md.</p></details>
 <details><summary>What was retracted?</summary>
 <p>Three figures, all still published with causes: two predictor AUCs
 (measurement defects) and one latency ratio (cross-graph comparison). The

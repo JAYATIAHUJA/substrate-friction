@@ -2,9 +2,14 @@
 
 This project began as a different product: **predict, from repository graph
 structure, whether an AI coding agent will fail a task — and route the hard
-ones to a human.** The plans in `docs/origin/` are the actual working
-documents, committed as written during the hackathon window, superseded
-versions included.
+ones to a human.** The founding brief is committed verbatim at
+[`docs/origin/2026-08-12-BUILD-SPEC.md`](origin/2026-08-12-BUILD-SPEC.md) —
+"a pre-flight check that looks at the *structure* of the code around a bug and
+predicts whether an AI coding agent will fail on it — before the agent burns
+tokens trying." Its own Part 6 defined the GO/NO-GO bar that later killed it,
+and its own Part 12 ordered us never to hide the negative result. The plans in
+`docs/origin/` are the working documents that followed, superseded versions
+included.
 
 The arc they record:
 
