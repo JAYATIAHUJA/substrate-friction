@@ -119,6 +119,10 @@ details.walkterm[open] summary::before{transform:rotate(90deg)}
 details.walkterm summary .hint{margin-left:auto;color:var(--muted);
 font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}
 details.walkterm pre{background:var(--raised);padding:16px 18px;overflow-x:auto;
+--cA:#ff571a;--cY:#f9c425;--cD:#4d4d4d;--cF:#9a9a9a}
+.walkterm pre .tA{color:var(--accent)}.walkterm pre .tY{color:var(--yellow)}
+.walkterm pre .tD{color:#4d4d4d}.walkterm pre .tF{color:#9a9a9a}
+.walkterm pre b{font-weight:700}
 font-family:'Geist Mono',ui-monospace,monospace;font-size:12.5px;
 line-height:1.55;color:var(--body)}
 .walkver{flex:0 0 auto;display:flex;align-items:center;padding:0 14px;

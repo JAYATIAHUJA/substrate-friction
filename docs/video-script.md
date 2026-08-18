@@ -24,7 +24,7 @@ run everything. Screens stay technical; your voice stays human.
 
 > "We started out predicting which tickets AI fails at. Our own rules
 > killed that idea — so we asked a simpler question: is the map any good?
-> Nobody had ever checked. We built the checker: the code mapped two ways,
+> Nobody had checked the maps these tools actually use. We built the checker: the code mapped two ways,
 > one HydraDB engine measuring, one seatbelt — as a command line, an API, a
 > tool the AI itself can ask, a security finding, and an Action guarding
 > this very repo."
