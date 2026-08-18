@@ -358,11 +358,12 @@ def render_compare(a: ArmView, b: ArmView, instance_id: str,
                  + ("" if comparable else
                     " — endpoints did not map onto shared identities on both arms;"
                     " the two-arm contrast below is structural only"))
-    lines.append("  " + RULE)
+    from friction import tui
+    lines.append("  " + tui.rule())
     lines += _render_arm(a, max_len)
-    lines.append("  " + RULE)
+    lines.append("  " + tui.rule())
     lines += _render_arm(b, max_len)
-    lines.append("  " + RULE)
+    lines.append("  " + tui.rule())
     lines += _render_delta(a, b, precision_report)
     lines.append("")
     return "\n".join(lines)
@@ -402,6 +403,7 @@ def _list_rows(manifest_path: Path = MANIFEST_PATH,
 
 
 def render_list(rows: list[dict]) -> str:
+    from friction import tui
     a_ans = sum(1 for r in rows if r["arm_a"]["answered"])
     b_ans = sum(1 for r in rows if r["arm_b"]["answered"])
     comparable = sum(1 for r in rows if r["comparable"])
@@ -414,7 +416,7 @@ def render_list(rows: list[dict]) -> str:
         "",
         f"  {'instance':30s} {'cmp':>3s} │ {'A nodes':>8s} {'A edges':>8s} {'A':>10s}"
         f" │ {'B nodes':>8s} {'B edges':>8s} {'B':>10s}",
-        "  " + "─" * 96,
+        "  " + tui.rule(96),
     ]
     for r in sorted(rows, key=lambda x: x["instance_id"]):
         a, b = r["arm_a"], r["arm_b"]
@@ -423,7 +425,7 @@ def render_list(rows: list[dict]) -> str:
             f"{a['nodes']:8,} {a['edges']:8,} {a['status']:>10s} │ "
             f"{b['nodes']:8,} {b['edges']:8,} {b['status']:>10s}")
     out += [
-        "  " + "─" * 96,
+        "  " + tui.rule(96),
         "  arm A = name-matched (Aider / RepoGraph / LocAgent style);"
         " arm B = type-resolved (scip-python / pyright).",
         "  Try:  friction compare --issue django__django-10973   (both arms answered)",
@@ -669,14 +671,15 @@ def _bar(value: float, hi: float, width: int = 24) -> str:
 
 
 def render_check(report: CheckReport) -> str:
+    from friction import tui
     r = report
-    lines = ["", f"  {r.instance_id}   (arm {r.arm[-1].upper()}, "
-             f"type-resolved; id band {r.band})"]
-    lines.append("  " + RULE)
+    lines = ["", tui.flash(f"  {r.instance_id}   (arm {r.arm[-1].upper()}, "
+             f"type-resolved; id band {r.band})")]
+    lines.append("  " + tui.rule())
     lines.append(f"  endpoints: {len(r.fix_ids)} fix-site(s), "
                  f"{len(r.test_ids)} test-target(s)")
     lines.append("")
-    lines.append("  FEATURE BARS  (every value labelled with its direction)")
+    lines.append("  " + tui.head("FEATURE BARS") + "  (every value labelled with its direction)")
     lines.append("  " + "-" * 52)
 
     # Per-feature reference maxima for the bar; hops render as explicit values.
@@ -689,18 +692,18 @@ def render_check(report: CheckReport) -> str:
             shown = "unreached" if val < 0 else f"{int(val)} hop(s)"
             lines.append(f"    {name:<17} {shown:>12}   {direction}")
         else:
-            bar = _bar(float(val), ref.get(name, 1.0))
+            bar = tui.bar(float(val), ref.get(name, 1.0))
             lines.append(f"    {name:<17} {val:>9.3f}   {bar}")
             lines.append(f"    {'':<17} {'':>9}   {direction}")
     lines.append("")
 
-    lines.append("  RECOMMENDATION")
+    lines.append("  " + tui.head("RECOMMENDATION"))
     lines.append("  " + "-" * 52)
     lines.append(f"    {r.recommendation}")
     lines.append(f"    [{r.caveat}]")
     lines.append("")
 
-    lines.append("  LIVE REACHABILITY  (in-engine, count(*) over [:CALLS*1..6])")
+    lines.append("  " + tui.head("LIVE REACHABILITY") + "  (in-engine, count(*) over [:CALLS*1..6])")
     lines.append("  " + "-" * 52)
     lines.append("    Cypher issued:")
     lines.append(f"      {r.cypher or '(no fix-site id — no query issued)'}")
@@ -715,7 +718,7 @@ def render_check(report: CheckReport) -> str:
                      f"(bounded, flat in k)")
     else:
         lines.append(f"    engine could not answer — {r.engine_note}")
-        lines.append("    no fabricated score printed")
+        lines.append(tui.flash("    no fabricated score printed"))
     lines.append("")
     return "\n".join(lines)
 
@@ -812,10 +815,14 @@ def cmd_gate(args) -> int:
         return 0 if verdict.decision == "SKIP_SAFE" else 1
 
     mark = "PASS" if verdict.decision == "SKIP_SAFE" else "FAIL"
-    print(RULE)
-    print(f"[{mark}]  {verdict.decision}      arm={verdict.arm}  k={verdict.k}"
-          + (f"  split={audit.split}" if audit.split else ""))
-    print(RULE)
+    from friction import tui
+    if tui.styling():
+        print(tui.banner())
+    meta = (f"arm={verdict.arm}  k={verdict.k}"
+            + (f"  split={audit.split}" if audit.split else ""))
+    print(tui.rule())
+    print(tui.verdict(mark, verdict.decision, meta))
+    print(tui.rule())
     print(f"  measured test->fix recall : {verdict.measured_recall:.3f}  "
           f"({audit.hits}/{audit.n} labelled instances)")
     print(f"  bar for skipping          : {verdict.threshold:.2f}")
@@ -825,14 +832,16 @@ def cmd_gate(args) -> int:
         print("\n  per repo:")
         for repo in sorted(audit.per_repo):
             h, t = audit.per_repo[repo]
-            print(f"    {repo:<14} {h:>3}/{t:<3}  {h / t:.2f}  {_bar(h / t, 1.0, 18)}")
+            print(f"    {repo:<14} {h:>3}/{t:<3}  {h / t:.2f}  "
+                  f"{tui.bar(h / t, 1.0, 18)}")
     if audit.misses:
         print(f"\n  {len(audit.misses)} instances where the guarding test is "
               f"unreachable. First 5:")
         for m in audit.misses[:5]:
             print(f"    {m}")
-        print(f"\n  replay one:  friction gate --instance {audit.misses[0]}")
-    print(RULE)
+        print(tui.dim(
+            f"\n  replay one:  friction gate --instance {audit.misses[0]}"))
+    print(tui.rule())
     return 0 if verdict.decision == "SKIP_SAFE" else 1
 
 
@@ -870,9 +879,10 @@ def _gate_replay(args) -> int:
     result = select_tests(g, fix, tests, args.k)
     missed = sorted(set(int(t) for t in tests) - result.selected)
 
-    print(RULE)
-    print(f"  {args.instance}")
-    print(RULE)
+    from friction import tui
+    print(tui.rule())
+    print(tui.flash(f"  {args.instance}"))
+    print(tui.rule())
     print(f"  arm          : {args.arm} "
           f"({'type-resolved' if args.arm == 'arm_b' else 'name-matched'})")
     print(f"  base commit  : {str(record.get('base_commit', 'unknown'))[:12]}")
@@ -886,8 +896,8 @@ def _gate_replay(args) -> int:
     print(f"  walk was graph-complete           : {result.graph_complete}")
     print()
     if missed:
-        print(f"  NOT SELECTED — {len(missed)} guarding test node(s) are "
-              f"unreachable")
+        print(tui.flash(f"  NOT SELECTED — {len(missed)} guarding test node(s) "
+                        f"are unreachable"))
         print(f"  from the change within {args.k} hops. A tool that skipped on")
         print(f"  this graph would not have run them.")
         print(f"    node ids: {missed[:8]}{' …' if len(missed) > 8 else ''}")
@@ -902,7 +912,7 @@ def _gate_replay(args) -> int:
         print()
         print("  the query, in the engine:")
         print(f"    {build_selection_cypher(int(fix[0]), 'CALLED_BY', args.k)}")
-    print(RULE)
+    print(tui.rule())
     return 1 if missed else 0
 
 
@@ -977,9 +987,10 @@ def cmd_verify(args) -> int:
         for f in failures:
             print(f"  - {f}")
         return 1
-    print("VERIFY OK: shipped graphs re-audited (24/44, 15/30); corpus summary "
-          "re-derived from per-instance rows; docs/README/site quote the "
-          "artifact exactly.")
+    from friction import tui
+    print(tui.flash("VERIFY OK:") + " shipped graphs re-audited (24/44, 15/30); "
+          "corpus summary re-derived from per-instance rows; docs/README/site "
+          "quote the artifact exactly.")
     return 0
 
 
@@ -1004,15 +1015,16 @@ def cmd_diff(args) -> int:
     if not index_path.exists():
         # A clean clone has no 67 MB scip index; print the pinned result the
         # same way the other cache-backed commands print committed reports.
-        print(RULE)
-        print("  THE DISAGREEMENT SET, COMPUTED IN THE ENGINE (pinned run)")
-        print(RULE)
+        from friction import tui
+        print(tui.rule())
+        print(tui.head("  THE DISAGREEMENT SET, COMPUTED IN THE ENGINE (pinned run)"))
+        print(tui.rule())
         print("  This machine lacks the regeneration inputs (the per-instance")
         print("  scip index, ~67 MB). The committed result of the live run —")
         print("  reified anti-join, 4,381 CONFIRMED / 1,492 UNCONFIRMED, exact")
         print("  parity with docs/graph-delta.md, 2.0 ms/edge — is in")
         print("  docs/engine-diff.md, including the executed Cypher.")
-        print(RULE)
+        print(tui.rule())
         return 0
 
     print("building arm A (tree-sitter) …")
@@ -1031,9 +1043,10 @@ def cmd_diff(args) -> int:
     finally:
         transport.close()
 
-    print(RULE)
-    print("  THE DISAGREEMENT SET, COMPUTED IN THE ENGINE")
-    print(RULE)
+    from friction import tui
+    print(tui.rule())
+    print(tui.head("  THE DISAGREEMENT SET, COMPUTED IN THE ENGINE"))
+    print(tui.rule())
     print(f"  reified      : {d.a_edges:,} arm-A + {d.b_edges:,} arm-B edge-"
           f"nodes, {d.sigs:,} Sig nodes, loaded in {d.load_ms/1000:.1f} s")
     print(f"  the query    : {d.sample_cypher}")
@@ -1042,9 +1055,9 @@ def cmd_diff(args) -> int:
           f"({d.query_ms_total/d.a_edges:.1f} ms/edge)")
     print(f"  CONFIRMED    : {d.confirmed:,}")
     print(f"  UNCONFIRMED  : {d.unconfirmed:,}")
-    print(f"  parity with the offline join (docs/graph-delta.md): EXACT — "
-          f"enforced, not observed")
-    print(RULE)
+    print(tui.flash("  parity with the offline join (docs/graph-delta.md): EXACT — "
+          "enforced, not observed"))
+    print(tui.rule())
     return 0
 
 
@@ -1070,9 +1083,10 @@ def _gate_replay_live(args) -> int:
         print(json.dumps(out, indent=2))
         return 1 if out["dropped_guarding_tests"] else 0
 
-    print(RULE)
-    print(f"  {out['instance_id']}   LIVE — executed in the engine")
-    print(RULE)
+    from friction import tui
+    print(tui.rule())
+    print(tui.flash(f"  {out['instance_id']}   LIVE — executed in the engine"))
+    print(tui.rule())
     print(f"  loaded       : {out['nodes_loaded']:,} nodes, "
           f"{out['edges_loaded']:,} edges (+ CALLED_BY reverse) "
           f"in {out['load_ms']:.0f} ms")
@@ -1084,9 +1098,9 @@ def _gate_replay_live(args) -> int:
           f"{out['guarding_tests']} guarding tests; offline walk agrees: "
           f"parity={out['parity']}")
     if out["dropped_guarding_tests"]:
-        print(f"  DROPPED: {out['dropped_guarding_tests']} guarding test(s) — "
-              f"the engine itself proves the miss.")
-    print(RULE)
+        print(tui.flash(f"  DROPPED: {out['dropped_guarding_tests']} guarding "
+                        f"test(s) — the engine itself proves the miss."))
+    print(tui.rule())
     return 1 if out["dropped_guarding_tests"] else 0
 
 
@@ -1112,10 +1126,14 @@ def _gate_live(args) -> int:
         }, indent=2))
         return 0 if v.decision == "SKIP_SAFE" else 1
 
-    print(RULE)
+    from friction import tui
+    if tui.styling():
+        print(tui.banner())
     mark = "PASS" if v.decision == "SKIP_SAFE" else "FAIL"
-    print(f"[{mark}]  {v.decision}      {live.repo.name}  arm={live.arm}  k={live.k}")
-    print(RULE)
+    print(tui.rule())
+    print(tui.verdict(mark, v.decision,
+                      f"{live.repo.name}  arm={live.arm}  k={live.k}"))
+    print(tui.rule())
     print(f"  graph            : {live.graph_nodes:,} nodes, "
           f"{live.graph_edges:,} edges")
     print(f"  changed symbols  : {live.changed_symbols:,}")
@@ -1132,7 +1150,7 @@ def _gate_live(args) -> int:
         print("\n  selected (first 10):")
         for t in live.selected_tests[:10]:
             print(f"    {t}")
-    print(RULE)
+    print(tui.rule())
     return 0 if v.decision == "SKIP_SAFE" else 1
 
 

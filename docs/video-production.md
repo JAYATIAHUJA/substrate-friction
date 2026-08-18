@@ -25,7 +25,10 @@ command, recorded live (speed-ramped in edit where noted).
 
 - Terminal: full-screen, dark background `#0a0a0a` if your theme allows,
   font ≥ 18 pt (JetBrains Mono / Menlo), window ~120×34. Hide the prompt
-  clutter: `export PS1="$ "`.
+  clutter: `export PS1="$ "`. The CLI now ships a TUI in the HydraDB scheme
+  (wordmark banner, `#ff571a` accents): it lights up automatically on a real
+  terminal; if piping through `tee`/`script`, set `export FORCE_COLOR=1`
+  first. Piped captures stay plain bytes — nothing committed changes.
 - Working dir: repo root. Engine up: `docker compose up -d` (wait ~10 s).
   Pre-flight each command once OFF-camera so caches are warm.
 - Screen recorder: QuickTime (⌘⇧5, record selected portion) or OBS. Record
