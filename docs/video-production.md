@@ -1,6 +1,6 @@
 # VIDEO PRODUCTION PACKAGE — the whole thing, shot by shot
 
-Hard cap **3:00**. Target cut **2:50**. Narration below is **~430 words**
+Hard cap **3:00**. Target cut **2:50**. Narration below is **~410 words**
 (≈2:45 at a brisk, confident pace — rehearse once with a timer).
 
 **The strategy, stated plainly:** a human judge feels the wow in the cold
@@ -60,11 +60,11 @@ NOT SELECTED — 370 guarding test node(s) are unreachable
 (hold on the yellow "≠ program-complete" box).
 
 **Narration:**
-> "Every AI coding agent builds a graph of your repository first — Aider,
-> RepoGraph, LocAgent — by matching names. Then tools skip tests based on
-> that graph. The trap: a walk can be complete with respect to the **graph**
-> while the graph is missing the edge that mattered in the **program**. An
-> extractor cannot fail-closed on an edge it never knew existed."
+> "Every coding agent builds a graph of your repo first — by matching names —
+> and tools skip tests on it. The trap: the walk can be complete for the
+> **graph** while the graph is missing the edge that mattered in the
+> **program**. An extractor can't fail-closed on an edge it never knew
+> existed."
 
 **On-screen text carried by the site itself:** "Graph-complete is not
 program-complete."
@@ -77,14 +77,12 @@ program-complete."
 At 0:50 flash the README's Origin→Now table for 4 s.
 
 **Narration:**
-> "Substrate Friction started as the opposite product — predict which tickets
-> the agent will fail, route them to humans. Our own pre-registered protocol
-> killed it: held-out AUC zero-point-four-eight, chance. The autopsy found
-> the real story: nobody had ever measured the ground the agents stand on.
-> So we built the gate. Three extraction arms — name-matched, type-resolved,
-> and dynamic execution — one HydraDB engine, five measurements, one
-> committed artifact, and five delivery surfaces: CLI, HTTP, MCP for agents,
-> SARIF for code scanning, and a GitHub Action that gates this very repo."
+> "This started as the opposite product — predict which tickets the agent
+> fails. Our own pre-registered protocol killed it at chance. The autopsy
+> found the real story: nobody had measured the ground agents stand on. So:
+> the gate. Three extraction arms, one HydraDB engine, one committed
+> artifact — delivered as CLI, HTTP, MCP for agents, SARIF, and a GitHub
+> Action that gates this very repo."
 
 **Rubric coverage (spoken):** completeness surfaces enumerated; originality
 (origin story + "nobody had ever measured").
@@ -97,14 +95,12 @@ At 0:50 flash the README's Origin→Now table for 4 s.
 `fig-longitudinal.svg` (hold).
 
 **Narration:**
-> "Against SWE-bench's own labels — the guarding test is *known* — name-matched
-> graphs reach it thirty-one percent of the time. Full pyright type
-> resolution: forty-two percent, pooled over one hundred seventy-two
-> instances in seven repositories. On matplotlib and pytest: **zero** — the
-> guarding tests sit in a different component. And across eight years of
-> Django the precision ceiling never moved: point-seven-five in 2017,
-> point-seven-five today. That's the third hypothesis we falsified against
-> ourselves. This isn't decay you outgrow — it's a constant of the technique."
+> "Against SWE-bench's own labels, name-matched graphs reach the guarding
+> test thirty-one percent of the time. Type resolution: forty-two — across
+> one hundred seventy-two instances, seven repos. Matplotlib and pytest:
+> **zero**. And across eight years of Django the ceiling never moved —
+> point-seven-five in 2017, point-seven-five today. Not decay you outgrow.
+> A constant of the technique."
 
 ---
 
@@ -121,22 +117,20 @@ and the recall line; **exit code 1 visible** (`echo $?` after).
 **4b (1:37–1:52)** `friction gate --instance django__django-11551 --live` —
 **speed-ramp the 16 s load to 4 s** (timer chip "8×"), then REAL TIME on:
 `engine 2.6 ms … parity=True … DROPPED`.
-> "Now watch the engine itself: sixty-one thousand edges loaded live, the
-> selection executed **inside HydraDB** in two-point-six milliseconds — exact
-> parity with the offline walk — and the engine itself proves the dropped
-> guarding test."
+> "Now the engine itself: sixty-one thousand edges loaded live, the
+> selection executed **inside HydraDB** in two-point-six milliseconds, exact
+> parity with the offline walk — the engine proves the dropped test."
 
 **4c (1:52–2:00)** `friction diff --live` (or capture): hold the block
 `CONFIRMED 4,381 / UNCONFIRMED 1,492 … parity EXACT — enforced`.
-> "Even our headline measurement runs in-engine: every edge reified as a
-> node, the anti-join as a two-hop traversal, two milliseconds per edge —
-> and it must reproduce the offline result exactly or it refuses to answer."
+> "Even the headline measurement runs in-engine: edges reified as nodes, the
+> anti-join as a traversal, two milliseconds per edge — and it must match the
+> offline result exactly or it refuses to answer."
 
 **4d (2:00–2:10)** `uv run python scripts/abstention_demo.py` (capture 07) —
 hold on `[agent] ABSTAIN … running the FULL suite`.
-> "And over MCP, a real client asks the gate before trusting any subset — and
-> abstains. The external signal the 2026 abstention literature says agents
-> are missing."
+> "And over MCP, a real client asks the gate first — and abstains. The
+> external signal the abstention literature says agents are missing."
 
 ---
 
@@ -146,12 +140,10 @@ hold on `[agent] ABSTAIN … running the FULL suite`.
 upstream links in the footer.
 
 **Narration:**
-> "HydraDB holds both graph arms at once in disjoint i-d bands. Bounded
-> reachability answers in milliseconds where path enumeration hit the
-> thirty-second wall. The image is pinned by digest — the exact build every
-> number was measured against. Four findings went upstream — including one we
-> got wrong, debugged with strace, and publicly retracted on their own
-> tracker."
+> "HydraDB holds both arms at once in disjoint i-d bands; bounded
+> reachability answers in milliseconds where enumeration hit the
+> thirty-second wall; the image is digest-pinned. Four findings went
+> upstream — including one we got wrong and publicly retracted."
 
 ---
 
@@ -162,12 +154,10 @@ upstream links in the footer.
 repo overlaid.
 
 **Narration:**
-> "How do you know any of this is real? Delete edges and the instrument
-> collapses to zero, provably. Three pre-registered hypotheses came back
-> wrong and ship as written. Three retracted results stay published, with
-> causes. And one command — friction verify — re-derives every number on the
-> screen you're looking at. Substrate Friction: measure the graph before you
-> trust it."
+> "How do you know this is real? Delete edges and the instrument collapses
+> to zero. Three pre-registered hypotheses came back wrong and ship as
+> written. And one command — friction verify — re-derives every number you
+> just watched. Substrate Friction: measure the graph before you trust it."
 
 **Edit:** end card holds 3 s to exactly 2:50–2:55. HARD STOP before 3:00.
 
