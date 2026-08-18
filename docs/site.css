@@ -6,8 +6,8 @@
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--body);
 font-family:Inter,system-ui,sans-serif;font-size:16px;line-height:1.65}
-h1,h2,h3{font-family:'Space Grotesk',Inter,sans-serif;color:var(--text);
-letter-spacing:-.02em}
+h1,h2,h3{font-family:'VT323','Geist Mono',ui-monospace,monospace;
+color:var(--text);letter-spacing:.01em;font-weight:400}
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
 code,.mono{font-family:'Geist Mono','JetBrains Mono',ui-monospace,monospace}
@@ -34,7 +34,7 @@ color:#0a0a0a}
 header.hero{padding:90px 0 60px;border-bottom:1px solid var(--line)}
 .hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;
 align-items:center}
-.hero h1{font-size:clamp(40px,6vw,64px);font-weight:700;line-height:1.05;
+.hero h1{font-size:clamp(52px,7.5vw,88px);line-height:.95;
 margin:14px 0 20px}
 .hero p{max-width:60ch;margin-bottom:26px}
 .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
@@ -42,7 +42,7 @@ margin:14px 0 20px}
 color:var(--muted);border:1px solid var(--line);padding:4px 10px}
 .hero img{width:100%;border:1px solid var(--line)}
 section{padding:70px 0;border-bottom:1px solid var(--line)}
-section h2{font-size:30px;margin:10px 0 24px}
+section h2{font-size:40px;margin:10px 0 24px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
 background:var(--line);border:1px solid var(--line)}
 .stat{background:var(--raised);padding:28px 22px}
@@ -52,7 +52,7 @@ color:var(--accent);font-weight:500}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:1px;
 background:var(--line);border:1px solid var(--line)}
 .col{background:var(--raised);padding:30px}
-.col h3{font-size:18px;margin-bottom:12px}
+.col h3{font-size:24px;margin-bottom:12px}
 .col.bad h3{color:var(--muted)}
 .col.good h3{color:var(--accent)}
 .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
