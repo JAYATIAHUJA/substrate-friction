@@ -413,7 +413,8 @@ never.</p></div>
 <div class="card"><div class="micro">THE SEATBELT</div>
 <p>So the gate asks one question before anything skips: <em>is this map
 proven good?</em> Until the answer is yes — run everything. The refusal is
-the product.</p></div>
+the product — and the pass path exists, tested, waiting for a graph class
+that earns it.</p></div>
 </div>
 </div></section>
 
@@ -979,7 +980,8 @@ dropped test. (This live run uses instance
 <p style="max-width:66ch">Over MCP — the protocol Claude Code, Cursor and
 OpenHands speak — a real client session asks the gate before trusting its
 own map. The decision rule here is a scripted, disclosed policy; the
-transport, the server and the verdict are real:</p>
+transport, the server and the verdict are real — the puppet is scripted,
+the refusal is real, and it is the same tool a live agent would call:</p>
 {term("scripts/abstention_demo.py — MCP session",
       "14-tui-abstention.txt")}
 </div></section>

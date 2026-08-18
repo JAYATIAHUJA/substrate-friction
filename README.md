@@ -58,7 +58,9 @@ years — it is not fixing itself.
 **So this tool is a seatbelt.** Before anything skips a test, `friction gate`
 asks one question — *is this map proven good enough?* — and because today the
 honest answer is always no, it says: **run everything, don't gamble.** That
-refusal is the product working.
+refusal is the product working. The gate is not welded shut: the pass path
+(`SKIP_SAFE`, exit 0) exists and is tested — it opens the day a graph class
+clears the measured bar; no class has earned it yet.
 
 It plugs in three places, all built and working:
 
