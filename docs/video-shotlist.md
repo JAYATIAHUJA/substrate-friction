@@ -21,8 +21,8 @@ per-repo spread line replaces the django-only line, and shot 5 (engine diff)
 replaces the second terminal beat. All quoted numbers exist in
 `data/shipped/gate-results.json` and `docs/engine-diff.md`.
 
-**Beat 2b narration (~12 s, verbatim):** "We measured the ceiling at five
-moments across eight years of Django. It never moved — 0.75 in 2017, 0.75
-today, while the graph grew forty percent. That's the third hypothesis we've
-falsified against ourselves. This isn't decay you outgrow; it's a constant of
-the technique."
+**Narration is now maintained in ONE place:** `docs/video-production.md`
+(plain-language cut, 453 words) with a read-aloud copy in
+`docs/video-script.md`. The longitudinal beat in that cut: "And across eight
+years of Django it never improved. Not a bug that ages out — it's how the map
+is made."

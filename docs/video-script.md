@@ -1,81 +1,78 @@
-# Video script — hard cap 3:00, target 2:55
+# Video narration — FINAL (plain-language cut)
 
-~400 words. One live terminal, one browser tab. Record the demo live; no stills.
+**The master production doc is `docs/video-production.md`** — shots,
+timings, edit plan, rubric map. This file is the narration alone, for
+reading aloud at the mic. 453 words ≈ 2:50 at a brisk pace.
 
----
+Speak from `docs/MINDMAP.md`'s glossary: map, seatbelt, hit rate,
+run everything. Screens stay technical; your voice stays human.
 
-## 1. Problem — 0:00–0:35
+## SHOT 0 — cold open
 
-> Every AI coding agent that touches your repository builds a graph of it
-> first. Aider, RepoGraph, LocAgent — they match identifier names into a call
-> graph, and then tools make decisions on top of it. The sharpest decision is
-> test selection: walk backwards from a change, run the tests you reach, skip
-> the rest.
->
-> Here's the trap. That walk can be provably complete — it exhausted every edge
-> the graph has — while the graph is missing the edge that mattered. An
-> extractor cannot fail-closed on an edge it never knew existed. Graph-complete
-> is not program-complete.
+> "An AI tool just used its map of this code to pick which tests to run.
+> The map says: done. It found **zero** of the **three hundred and seventy**
+> tests that would catch this bug. Substrate Friction is the seatbelt that
+> stops this."
 
-*Screen: the prune.png figure — 21 name-matched edges, 9 unconfirmed in red.*
+## SHOT 1 — the problem
 
-## 2. Project — 0:35–1:27
+> "Every AI coding tool draws a map of your code and trusts it to skip
+> tests. Here's the trap: the map can be perfectly drawn — and still missing
+> roads. And a tool can never warn you about a road its map doesn't have."
 
-> So we measured the thing everyone assumes: can these graphs actually reach
-> the tests that guard a change? The label is free — SWE-bench's FAIL_TO_PASS
-> test IS the test that guards the fix. If your selector doesn't return it, you
-> just skipped the one test that catches the bug.
->
-> Across one hundred seventy-two labelled instances in seven repositories:
-> name-matched graphs reach the guarding test thirty-one percent of the time.
-> Full pyright type resolution: forty-two percent. On django alone, fifty-five.
-> On matplotlib and pytest: zero — the guarding tests sit in a different
-> component of the graph. The bar for safely skipping is ninety-five percent.
-> Nothing is close, and upgrading the extractor moved paired recall by seven
-> points — the same precision-recall separation ICSE 2020 reported for Java.
->
-> And we measured the ceiling at five moments across eight years of Django.
-> It never moved — 0.75 in 2017, 0.75 today, while the graph grew forty
-> percent. That's the third hypothesis we've falsified against ourselves.
-> This isn't decay you outgrow; it's a constant of the technique.
+## SHOT 2 — what we built
 
-*Screen: the recall table from docs/gate.md.*
+> "We started out predicting which tickets AI fails at. Our own rules
+> killed that idea — so we asked a simpler question: is the map any good?
+> Nobody had ever checked. We built the checker: the code mapped two ways,
+> one HydraDB engine measuring, one seatbelt — as a command line, an API, a
+> tool the AI itself can ask, a security finding, and an Action guarding
+> this very repo."
 
-## 3. Demo — 1:27–2:25
+## SHOT 3 — the numbers
 
-*Terminal, live:*
+> "Tested against one hundred seventy-two real bug fixes: the map most
+> tools use finds the bug-catching test thirty-one percent of the time. The
+> careful map: forty-two. On two major projects: **never**. And across
+> eight years of Django it never improved. Not a bug that ages out — it's
+> how the map is made."
 
-```bash
-uv run python scripts/gate_demo.py
-```
+## SHOT 4a — the gate
 
-> The corpus verdict: RUN_FULL, exit code one — drop it in CI and an unmeasured
-> graph fails the build. Then one real instance: django-10097. The walk is
-> graph-complete — and it selected zero of the three hundred and seventy tests
-> that guard this fix. Zero.
+> "The seatbelt in action. Hit rate measured, bar set at ninety-five
+> percent, verdict: run everything. Exit code one — in your CI, that blocks
+> the merge."
 
-*Browser: `localhost:8000/gate/django__django-10097` — point at
-`dropped_guarding_tests` and the Cypher. Then one beat:*
+## SHOT 4b — live in the engine
 
-```bash
-friction gate --repo . --changed src/friction/gate.py
-```
+> "Now the graph database does it itself: sixty-one thousand connections
+> loaded live, the check runs **inside HydraDB** in two-point-six
+> milliseconds, matching our answer exactly — the database proves which
+> test would have been skipped."
 
-> And it runs on your repository, today — with the corpus recall applied as a
-> stated prior, because an unlabelled repo can't yield a recall figure and we
-> won't pretend otherwise. Agents get the same answer over MCP.
+## SHOT 4c — the anti-join
 
-## 4. HydraDB — 2:25–2:55
+> "Even our headline number is computed by the database — two milliseconds
+> per connection checked — and if it can't reproduce our result exactly, it
+> refuses to answer at all."
 
-> Both graphs live in one HydraDB engine in disjoint id bands. The walk runs
-> in-engine — and we learned the engine's rules by measurement: count(*) works
-> where count(n) is rejected; incoming variable-length patterns are rejected,
-> so the backwards walk is an outward walk over a materialised reverse edge;
-> bounded reachability answers in twelve milliseconds where path enumeration
-> timed out at thirty seconds. Three findings went upstream: issue 81, PR 82,
-> and the CI in this repo wipes the store between phases because of what we
-> found.
->
-> Substrate Friction: measure the graph before you trust it.
+## SHOT 4d — the agent abstains
 
-*Screen: the hydra-verify badge, green.*
+> "And here, an AI agent asks the seatbelt before trusting its own map —
+> and backs off. That's the safety signal researchers say agents can't
+> generate for themselves."
+
+## SHOT 5 — HydraDB
+
+> "HydraDB holds both maps at once and answers in milliseconds where the
+> naive approach hit a thirty-second wall. We pinned the exact engine build,
+> and sent four findings back to its makers — including one we got wrong
+> and publicly retracted."
+
+## SHOT 6 — proof + potential
+
+> "Is this real? We broke our own meter on purpose — the score falls to
+> zero, as it should. We published the three predictions that came back
+> wrong. One command re-derives every number you just watched. And every
+> map an AI trusts needs this seatbelt. Substrate Friction: measure the map
+> before you trust it."
