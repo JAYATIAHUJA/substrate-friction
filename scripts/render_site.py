@@ -141,6 +141,12 @@ footer .digest{margin-top:36px;color:var(--muted);
 font-family:'Geist Mono',ui-monospace,monospace;font-size:11px;
 word-break:break-all}
 img.diagram{width:100%;border:1px solid var(--line)}
+.walkterm{margin:26px 0;border:1px solid var(--line-strong)}
+.walkterm figcaption{background:var(--bg);padding:8px 14px;border-bottom:1px
+solid var(--line)}
+.walkterm pre{background:var(--raised);padding:16px 18px;overflow-x:auto;
+font-family:'Geist Mono',ui-monospace,monospace;font-size:12.5px;
+line-height:1.55;color:var(--body)}
 .artband{margin:0;border-bottom:1px solid var(--line)}
 .artband img{width:100%;display:block}
 .artband figcaption{font-size:12px;color:var(--muted);padding:10px 24px 26px}
@@ -296,7 +302,7 @@ NAV = """<nav><div class="wrap">
 <li><a href="#gate">Gate</a></li>
 <li><a href="#measurement">Measurement</a></li>
 <li><a href="#engine">Engine</a></li>
-<li><a href="#findings">Findings</a></li>
+<li><a href="walkthrough.html">Walkthrough</a></li>\n<li><a href="#findings">Findings</a></li>
 <li><a href="#evidence">Evidence</a></li>
 <li><a href="https://github.com/areycruzer/substrate-friction">GitHub</a></li>
 </ul>
@@ -318,6 +324,7 @@ fixes — <b>it misses more than half of what matters.</b>
 <code>friction gate</code> is the seatbelt: nothing skips until the map is
 proven good. Today, the honest verdict is always the same — run everything.</p>
 <a class="btn primary" href="https://github.com/areycruzer/substrate-friction#quickstart">Run the gate</a>
+<a class="btn" href="walkthrough.html">Watch it on a real bug</a>
 <a class="btn" href="https://github.com/areycruzer/substrate-friction/blob/main/docs/gate.md">Read the measurement</a>
 <div class="chips">
 <span class="chip">engine digest-pinned</span>
@@ -567,11 +574,126 @@ NOTFOUND = HEAD + NAV.join(["<body>", ""]) + """
 </body></html>"""
 
 
+def _capture(name, first=None, last=None):
+    """Read a committed terminal capture and return escaped HTML lines."""
+    lines = Path(f"docs/captures/{name}").read_text(
+        encoding="utf-8").splitlines()
+    if first is not None or last is not None:
+        lines = lines[first:last]
+    esc = "\n".join(l.replace("&", "&amp;").replace("<", "&lt;")
+                     .replace(">", "&gt;") for l in lines)
+    return esc
+
+
+def walkthrough() -> str:
+    """One page, one real Django bug, the whole system demonstrated —
+    from committed records. Running this page requires nothing."""
+
+    def term(name, cap):
+        return (f'<figure class="walkterm"><figcaption class="micro">'
+                f'{name}</figcaption><pre>{cap}</pre></figure>')
+
+    steps = f"""
+<section><div class="wrap">
+<div class="micro">THE WALKTHROUGH / ONE REAL BUG, END TO END</div>
+<h1 style="font-size:clamp(40px,5.5vw,64px)">Watch it happen to a real
+Django bug.<span class="caret" aria-hidden="true"></span></h1>
+<p style="max-width:66ch">Everything on this page is a committed, verbatim
+record from this repository — real ticket, real commands, real output.
+<b>This page runs nothing and requires nothing.</b> To re-run it all
+yourself: <code>git clone</code>, <code>./setup.sh</code> (needs Docker),
+<code>friction verify</code>.</p>
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 1 / A REAL TICKET</div>
+<h2>A bug lands in Django.</h2>
+<p style="max-width:66ch">SWE-bench instance
+<code>django__django-10097</code>: a real, human-verified Django bug at a
+pinned commit (<code>b9cf764b</code>). The humans who curated it recorded
+exactly which tests catch it — <b>370 of them</b>. That answer key is what
+lets us grade the machines.</p>
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 2 / WHAT THE AI'S MAP SAYS</div>
+<h2>The tool draws its map and picks tests.</h2>
+<p style="max-width:66ch">An AI tool maps the codebase — 26,848 functions,
+58,006 connections — and walks it backwards from the change to find affected
+tests. The walk finishes. The map says: <em>done, checked everything.</em>
+Here is that exact replay:</p>
+{term("friction gate --instance django__django-10097",
+      _capture("02-replay-10097.txt"))}
+<p style="max-width:66ch"><b>Zero of the 370 bug-catching tests were
+selected — and the walk was provably complete.</b> The map was perfectly
+drawn and still missing the roads that mattered. Without a seatbelt, this
+bug ships, silently.</p>
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 3 / THE SEATBELT REFUSES</div>
+<h2>The gate says: run everything.</h2>
+<p style="max-width:66ch">Before anything skips, <code>friction gate</code>
+asks: <em>has this class of map been proven good?</em> Measured over 172
+real bugs, its hit rate is 0.545 on Django and 0.419 pooled — far below the
+0.95 bar. Verdict, with exit code 1 (in CI, that blocks the merge):</p>
+{term("friction gate --arm arm_b", _capture("01-gate-verdict.txt"))}
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 4 / THE DATABASE PROVES IT</div>
+<h2>Not our word — the engine's.</h2>
+<p style="max-width:66ch">We load the map into HydraDB live and let the
+graph engine run the check itself: 61,536 connections in, the walk answered
+in 2.6 milliseconds, matching our offline answer exactly — and naming the
+dropped test. (This live run uses instance
+<code>django__django-11551</code>, chosen for load size.)</p>
+{term("friction gate --instance django__django-11551 --live",
+      _capture("03-live-parity.txt"))}
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 5 / THE AGENT ASKS FIRST</div>
+<h2>An AI agent consults the seatbelt — and backs off.</h2>
+<p style="max-width:66ch">Over MCP — the protocol Claude Code, Cursor and
+OpenHands speak — a real client session asks the gate before trusting its
+own map. The decision rule here is a scripted, disclosed policy; the
+transport, the server and the verdict are real:</p>
+{term("scripts/abstention_demo.py — MCP session",
+      _capture("07-abstention.txt"))}
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 6 / CHECK US</div>
+<h2>One command re-derives every number.</h2>
+<p style="max-width:66ch">Every figure on this site is regenerated from one
+committed artifact, and <code>friction verify</code> re-checks the whole
+chain — the shipped graphs, the summary, the README, this site:</p>
+{term("friction verify", _capture("08-verify.txt"))}
+<p style="max-width:66ch">The deep story — how the maps were measured, the
+five pre-registered studies, three falsified hypotheses, three kept
+retractions — is on the <a href="index.html">main page</a> and in the
+<a href="https://github.com/areycruzer/substrate-friction">repository</a>.</p>
+</div></section>"""
+
+    return (HEAD.replace("<title>substrate—friction",
+            "<title>walkthrough — substrate—friction")
+            + NAV + steps + """
+<footer><div class="wrap"><div class="digest">every block above is a
+committed capture in docs/captures/ · rendered by scripts/render_site.py ·
+this page requires nothing to view and one ./setup.sh to reproduce</div>
+</div></footer>
+<script src="tree-data.js"></script>
+<script src="site.js"></script>
+</body></html>""")
+
+
 def main() -> None:
     Path("docs/site.css").write_text(CSS, encoding="utf-8")
     Path("docs/site.js").write_text(JS, encoding="utf-8")
     Path("docs/index.html").write_text(HEAD + body(), encoding="utf-8")
     Path("docs/404.html").write_text(NOTFOUND, encoding="utf-8")
+    Path("docs/walkthrough.html").write_text(walkthrough(), encoding="utf-8")
     total = sum(Path(f).stat().st_size for f in
                 ("docs/index.html", "docs/site.css", "docs/site.js",
                  "docs/plots/hero-terminal.svg",

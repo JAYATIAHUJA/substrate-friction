@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>walkthrough — substrate—friction · measure the graph before you trust it</title>
+<meta name="description" content="Graph-based test selection is unsafe in a way that is invisible from inside the tool. friction gate measures guarding-test recall against SWE-bench labels: 0.419 pooled across 7 repos. Verdict: RUN_FULL.">
+<link rel="canonical" href="https://areycruzer.github.io/substrate-friction/">
+<meta property="og:title" content="substrate—friction">
+<meta property="og:description" content="Before your tool skips a test, measure the graph it trusted. Guarding-test recall 0.419 pooled / 7 repos — verdict RUN_FULL.">
+<meta property="og:image" content="https://areycruzer.github.io/substrate-friction/og.png">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+</head><nav><div class="wrap">
+<a class="wordmark" href="#">substrate<b>—</b>friction</a>
+<ul>
+<li><a href="#gate">Gate</a></li>
+<li><a href="#measurement">Measurement</a></li>
+<li><a href="#engine">Engine</a></li>
+<li><a href="walkthrough.html">Walkthrough</a></li>
+<li><a href="#findings">Findings</a></li>
+<li><a href="#evidence">Evidence</a></li>
+<li><a href="https://github.com/areycruzer/substrate-friction">GitHub</a></li>
+</ul>
+<a class="btn primary" href="https://github.com/areycruzer/substrate-friction#quickstart">Run the gate</a>
+</div></nav>
+<section><div class="wrap">
+<div class="micro">THE WALKTHROUGH / ONE REAL BUG, END TO END</div>
+<h1 style="font-size:clamp(40px,5.5vw,64px)">Watch it happen to a real
+Django bug.<span class="caret" aria-hidden="true"></span></h1>
+<p style="max-width:66ch">Everything on this page is a committed, verbatim
+record from this repository — real ticket, real commands, real output.
+<b>This page runs nothing and requires nothing.</b> To re-run it all
+yourself: <code>git clone</code>, <code>./setup.sh</code> (needs Docker),
+<code>friction verify</code>.</p>
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 1 / A REAL TICKET</div>
+<h2>A bug lands in Django.</h2>
+<p style="max-width:66ch">SWE-bench instance
+<code>django__django-10097</code>: a real, human-verified Django bug at a
+pinned commit (<code>b9cf764b</code>). The humans who curated it recorded
+exactly which tests catch it — <b>370 of them</b>. That answer key is what
+lets us grade the machines.</p>
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 2 / WHAT THE AI'S MAP SAYS</div>
+<h2>The tool draws its map and picks tests.</h2>
+<p style="max-width:66ch">An AI tool maps the codebase — 26,848 functions,
+58,006 connections — and walks it backwards from the change to find affected
+tests. The walk finishes. The map says: <em>done, checked everything.</em>
+Here is that exact replay:</p>
+<figure class="walkterm"><figcaption class="micro">friction gate --instance django__django-10097</figcaption><pre>$ friction gate --instance django__django-10097
+────────────────────────────────────────────────────────────────────
+  django__django-10097
+────────────────────────────────────────────────────────────────────
+  arm          : arm_b (type-resolved)
+  base commit  : b9cf764be62e
+  graph        : 26,848 nodes, 58,006 edges
+
+  changed symbols (fix sites)       : 1
+  tests that guard the fix (label)  : 370   &lt;- SWE-bench FAIL_TO_PASS
+  tests the selector returns        : 0
+  walk was graph-complete           : True
+
+  NOT SELECTED — 370 guarding test node(s) are unreachable
+  from the change within 6 hops. A tool that skipped on
+  this graph would not have run them.
+    node ids: [20000010295, 20000010296, 20000010297, 20000010298, 20000010301, 20000010302, 20000010471, 20000010476] …
+
+  The walk exhausted its frontier: it is complete with respect to the
+  edges this graph has. The guarding test is missing because the edge
+  connecting it was never extracted — and no completeness check on a
+  graph can see an edge that is not in it.
+
+  the query, in the engine:
+    MATCH (s {id: 20000003779})-[:CALLED_BY*1..6]-&gt;(n) RETURN n.id AS id
+────────────────────────────────────────────────────────────────────</pre></figure>
+<p style="max-width:66ch"><b>Zero of the 370 bug-catching tests were
+selected — and the walk was provably complete.</b> The map was perfectly
+drawn and still missing the roads that mattered. Without a seatbelt, this
+bug ships, silently.</p>
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 3 / THE SEATBELT REFUSES</div>
+<h2>The gate says: run everything.</h2>
+<p style="max-width:66ch">Before anything skips, <code>friction gate</code>
+asks: <em>has this class of map been proven good?</em> Measured over 172
+real bugs, its hit rate is 0.545 on Django and 0.419 pooled — far below the
+0.95 bar. Verdict, with exit code 1 (in CI, that blocks the merge):</p>
+<figure class="walkterm"><figcaption class="micro">friction gate --arm arm_b</figcaption><pre>$ friction gate --arm arm_b
+────────────────────────────────────────────────────────────────────
+[FAIL]  RUN_FULL      arm=arm_b  k=6
+────────────────────────────────────────────────────────────────────
+  measured test-&gt;fix recall : 0.545  (24/44 labelled instances)
+  bar for skipping          : 0.95
+
+  measured test-&gt;fix recall 0.545 on n=44 labelled instances is below the 0.95 bar: 45% of tests known to guard their fix are not reachable in this graph, so a skip would silently drop them
+
+  per repo:
+    django          24/44   0.55  ██████████········
+
+  20 instances where the guarding test is unreachable. First 5:
+    django__django-10097
+    django__django-10880
+    django__django-11066
+    django__django-11138
+    django__django-11149
+
+  replay one:  friction gate --instance django__django-10097
+────────────────────────────────────────────────────────────────────</pre></figure>
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 4 / THE DATABASE PROVES IT</div>
+<h2>Not our word — the engine's.</h2>
+<p style="max-width:66ch">We load the map into HydraDB live and let the
+graph engine run the check itself: 61,536 connections in, the walk answered
+in 2.6 milliseconds, matching our offline answer exactly — and naming the
+dropped test. (This live run uses instance
+<code>django__django-11551</code>, chosen for load size.)</p>
+<figure class="walkterm"><figcaption class="micro">friction gate --instance django__django-11551 --live</figcaption><pre>$ friction gate --instance django__django-11551 --live
+────────────────────────────────────────────────────────────────────
+  django__django-11551   LIVE — executed in the engine
+────────────────────────────────────────────────────────────────────
+  loaded       : 28,353 nodes, 61,536 edges (+ CALLED_BY reverse) in 16631 ms
+  query        : MATCH (s {id: 920310000127})-[:CALLED_BY*1..6]-&gt;(n) RETURN n.id AS id
+                 engine 2.6 ms, 2 nodes reached
+  engine selected 0 of 1 guarding tests; offline walk agrees: parity=True
+  DROPPED: 1 guarding test(s) — the engine itself proves the miss.
+────────────────────────────────────────────────────────────────────</pre></figure>
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 5 / THE AGENT ASKS FIRST</div>
+<h2>An AI agent consults the seatbelt — and backs off.</h2>
+<p style="max-width:66ch">Over MCP — the protocol Claude Code, Cursor and
+OpenHands speak — a real client session asks the gate before trusting its
+own map. The decision rule here is a scripted, disclosed policy; the
+transport, the server and the verdict are real:</p>
+<figure class="walkterm"><figcaption class="micro">scripts/abstention_demo.py — MCP session</figcaption><pre>$ uv run python scripts/abstention_demo.py
+[client] connected over stdio; server tools: ['gate_check', 'gate_explain', 'graph_query']
+[agent]  task: 'change src touching the ORM; run affected tests'
+[agent]  policy (scripted, disclosed): ask gate_check before trusting any graph-selected subset
+[gate]   decision=RUN_FULL recall=0.5455 n=44 bar=0.95
+[agent]  ABSTAIN from subset selection -&gt; running the FULL suite (the external signal overrode the graph walk)
+[gate]   evidence replay: django__django-10097 — graph_complete=True, selected 0 of 370 guarding tests
+[agent]  behaviour taken: full-suite
+
+wrote /tmp/abst.md</pre></figure>
+</div></section>
+
+<section><div class="wrap">
+<div class="micro">STEP 6 / CHECK US</div>
+<h2>One command re-derives every number.</h2>
+<p style="max-width:66ch">Every figure on this site is regenerated from one
+committed artifact, and <code>friction verify</code> re-checks the whole
+chain — the shipped graphs, the summary, the README, this site:</p>
+<figure class="walkterm"><figcaption class="micro">friction verify</figcaption><pre>$ friction verify
+VERIFY OK: shipped graphs re-audited (24/44, 15/30); corpus summary re-derived from per-instance rows; docs/README/site quote the artifact exactly.</pre></figure>
+<p style="max-width:66ch">The deep story — how the maps were measured, the
+five pre-registered studies, three falsified hypotheses, three kept
+retractions — is on the <a href="index.html">main page</a> and in the
+<a href="https://github.com/areycruzer/substrate-friction">repository</a>.</p>
+</div></section>
+<footer><div class="wrap"><div class="digest">every block above is a
+committed capture in docs/captures/ · rendered by scripts/render_site.py ·
+this page requires nothing to view and one ./setup.sh to reproduce</div>
+</div></footer>
+<script src="tree-data.js"></script>
+<script src="site.js"></script>
+</body></html>

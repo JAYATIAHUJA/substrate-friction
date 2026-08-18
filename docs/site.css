@@ -107,6 +107,12 @@ footer .digest{margin-top:36px;color:var(--muted);
 font-family:'Geist Mono',ui-monospace,monospace;font-size:11px;
 word-break:break-all}
 img.diagram{width:100%;border:1px solid var(--line)}
+.walkterm{margin:26px 0;border:1px solid var(--line-strong)}
+.walkterm figcaption{background:var(--bg);padding:8px 14px;border-bottom:1px
+solid var(--line)}
+.walkterm pre{background:var(--raised);padding:16px 18px;overflow-x:auto;
+font-family:'Geist Mono',ui-monospace,monospace;font-size:12.5px;
+line-height:1.55;color:var(--body)}
 .artband{margin:0;border-bottom:1px solid var(--line)}
 .artband img{width:100%;display:block}
 .artband figcaption{font-size:12px;color:var(--muted);padding:10px 24px 26px}
