@@ -59,13 +59,13 @@ NOT SELECTED — 370 guarding test node(s) are unreachable
 ```
 
 **Narration:**
-> "This test-selection walk is provably complete. It found **zero** of the
-> **three hundred and seventy** tests that guard this fix. Complete — and
-> blind. Substrate Friction is the pre-flight check that catches this —
-> before anything skips."
+> "An AI tool just used its map of this code to pick which tests to run.
+> The map says: done. It found **zero** of the **three hundred and seventy**
+> tests that would catch this bug. Substrate Friction is the seatbelt that
+> stops this."
 
-**On-screen chip (burned in, bottom):** `substrate—friction · the pre-flight
-check for the graph under your AI coding agent`
+**On-screen chip (burned in, bottom):** `substrate—friction · the seatbelt
+for AI test-skipping`
 
 **Edit:** freeze-frame on `370`, 1-beat silence. The wow and the elevator
 pitch land together inside the first twelve seconds — judges reviewing
@@ -79,10 +79,9 @@ back-to-back know what this is before Shot 1.
 (hold on the yellow "≠ program-complete" box).
 
 **Narration:**
-> "Every coding agent builds a graph of your repo by matching names — and
-> tools skip tests on it. The trap: complete for the **graph**, blind to the
-> **program**. An extractor can't fail-closed on an edge it never knew
-> existed."
+> "Every AI coding tool draws a map of your code and trusts it to skip
+> tests. Here's the trap: the map can be perfectly drawn — and still missing
+> roads. And a tool can never warn you about a road its map doesn't have."
 
 **On-screen text carried by the site itself:** "Graph-complete is not
 program-complete."
@@ -95,12 +94,12 @@ program-complete."
 At 0:50 flash the README's Origin→Now table for 4 s.
 
 **Narration:**
-> "This started as the opposite product — predict which tickets the agent
-> fails. Our own pre-registered protocol killed it at chance. The autopsy
-> found the real story: nobody had measured the ground agents stand on. So:
-> the gate. Three extraction arms, one HydraDB engine, one committed
-> artifact — delivered as CLI, HTTP, MCP for agents, SARIF, and a GitHub
-> Action that gates this very repo."
+> "We started out predicting which tickets AI fails at. Our own rules
+> killed that idea — so we asked a simpler question: is the map any good?
+> Nobody had ever checked. We built the checker: the code mapped two ways,
+> one HydraDB engine measuring, one seatbelt — as a command line, an API, a
+> tool the AI itself can ask, a security finding, and an Action guarding
+> this very repo."
 
 **Rubric coverage (spoken):** completeness surfaces enumerated; originality
 (origin story + "nobody had ever measured").
@@ -113,12 +112,11 @@ At 0:50 flash the README's Origin→Now table for 4 s.
 `fig-longitudinal.svg` (hold).
 
 **Narration:**
-> "Against SWE-bench's own labels, name-matched graphs reach the guarding
-> test thirty-one percent of the time. Type resolution: forty-two — across
-> one hundred seventy-two instances, seven repos. Matplotlib and pytest:
-> **zero**. And across eight years of Django the ceiling never moved —
-> point-seven-five in 2017, point-seven-five today. Not decay you outgrow.
-> A constant of the technique."
+> "Tested against one hundred seventy-two real bug fixes: the map most
+> tools use finds the bug-catching test thirty-one percent of the time. The
+> careful map: forty-two. On two major projects: **never**. And across
+> eight years of Django it never improved. Not a bug that ages out — it's
+> how the map is made."
 
 ---
 
@@ -129,26 +127,29 @@ bottom-left names each command (OCR bait).
 
 **4a (1:27–1:37)** `friction gate --arm arm_b` — hold on `[FAIL] RUN_FULL`
 and the recall line; **exit code 1 visible** (`echo $?` after).
-> "The gate. Recall measured, bar zero-nine-five, verdict RUN-FULL, exit code
-> one — drop it in CI and an unmeasured graph fails the build."
+> "The seatbelt in action. Hit rate measured, bar set at ninety-five
+> percent, verdict: run everything. Exit code one — in your CI, that blocks
+> the merge."
 
 **4b (1:37–1:52)** `friction gate --instance django__django-11551 --live` —
 **speed-ramp the 16 s load to 4 s** (timer chip "8×"), then REAL TIME on:
 `engine 2.6 ms … parity=True … DROPPED`.
-> "Now the engine itself: sixty-one thousand edges loaded live, the
-> selection executed **inside HydraDB** in two-point-six milliseconds, exact
-> parity with the offline walk — the engine proves the dropped test."
+> "Now the graph database does it itself: sixty-one thousand connections
+> loaded live, the check runs **inside HydraDB** in two-point-six
+> milliseconds, matching our answer exactly — the database proves which
+> test would have been skipped."
 
 **4c (1:52–2:00)** `friction diff --live` (or capture): hold the block
 `CONFIRMED 4,381 / UNCONFIRMED 1,492 … parity EXACT — enforced`.
-> "Even the headline measurement runs in-engine: edges reified as nodes, the
-> anti-join as a traversal, two milliseconds per edge — and it must match the
-> offline result exactly or it refuses to answer."
+> "Even our headline number is computed by the database — two milliseconds
+> per connection checked — and if it can't reproduce our result exactly, it
+> refuses to answer at all."
 
 **4d (2:00–2:10)** `uv run python scripts/abstention_demo.py` (capture 07) —
 hold on `[agent] ABSTAIN … running the FULL suite`.
-> "And over MCP, a real client asks the gate first — and abstains. The
-> external signal the abstention literature says agents are missing."
+> "And here, an AI agent asks the seatbelt before trusting its own map —
+> and backs off. That's the safety signal researchers say agents can't
+> generate for themselves."
 
 ---
 
@@ -158,10 +159,10 @@ hold on `[agent] ABSTAIN … running the FULL suite`.
 upstream links in the footer.
 
 **Narration:**
-> "HydraDB holds both arms at once in disjoint i-d bands; bounded
-> reachability answers in milliseconds where enumeration hit the
-> thirty-second wall; the image is digest-pinned. Four findings went
-> upstream — including one we got wrong and publicly retracted."
+> "HydraDB holds both maps at once and answers in milliseconds where the
+> naive approach hit a thirty-second wall. We pinned the exact engine build,
+> and sent four findings back to its makers — including one we got wrong
+> and publicly retracted."
 
 ---
 
@@ -172,12 +173,11 @@ upstream links in the footer.
 repo overlaid.
 
 **Narration:**
-> "Is this real? Delete edges and the instrument collapses to zero. Three
-> pre-registered hypotheses came back wrong and ship as written. One
-> command — friction verify — re-derives every number you just watched.
-> And it's a beginning: an in-engine certification primitive is proposed
-> upstream, and every graph a coding agent trusts needs this gate.
-> Substrate Friction: measure the graph before you trust it."
+> "Is this real? We broke our own meter on purpose — the score falls to
+> zero, as it should. We published the three predictions that came back
+> wrong. One command re-derives every number you just watched. And every
+> map an AI trusts needs this seatbelt. Substrate Friction: measure the map
+> before you trust it."
 
 **Edit:** end card holds 3 s to exactly 2:50–2:55. HARD STOP before 3:00.
 

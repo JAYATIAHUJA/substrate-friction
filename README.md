@@ -44,6 +44,37 @@ Every figure names its scope; every figure is emitted by a committed script.
 
 ---
 
+## The 60-second version (no jargon)
+
+AI coding tools save time by **skipping tests** they think don't matter. To
+decide, they use a **map of your code** — which function calls which. Nobody
+had ever checked whether that map is any good.
+
+**We checked.** Against 172 real, human-verified bug fixes: the map leads to
+the one test that would catch the bug **42% of the time** (the quick map most
+tools use: 31%; on some projects: **0%**). And it's been this way for eight
+years — it is not fixing itself.
+
+**So this tool is a seatbelt.** Before anything skips a test, `friction gate`
+asks one question — *is this map proven good enough?* — and because today the
+honest answer is always no, it says: **run everything, don't gamble.** That
+refusal is the product working.
+
+It plugs in three places, all built and working:
+
+1. **Your CI** — a failed gate blocks the merge (and can show up in GitHub's
+   security tab as an "unsafe test skip" finding).
+2. **The AI agent itself** — over MCP, the agent asks the gate before
+   trusting its own map, and backs off when refused.
+3. **Your terminal** — point it at any repo:
+   `friction gate --repo . --changed <file>`.
+
+Everything below is the deep version — how the map was measured, in a graph
+database, with every number re-checkable by one command. The presenter's
+plain-language cheat-sheet is [`docs/MINDMAP.md`](docs/MINDMAP.md).
+
+---
+
 ## What it is
 
 **Origin → now, in one table** (the long version is
