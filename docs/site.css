@@ -14,6 +14,8 @@ code,.mono{font-family:'Geist Mono','JetBrains Mono',ui-monospace,monospace}
 .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
 .micro{font-family:'Geist Mono',ui-monospace,monospace;font-size:12px;
 text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+#bgtree{position:fixed;inset:0;z-index:0;pointer-events:none}
+nav,header,section,footer,.wrap{position:relative;z-index:1}
 nav{position:sticky;top:0;background:var(--bg);border-bottom:1px solid
 var(--line);z-index:10}
 nav .wrap{display:flex;align-items:center;justify-content:space-between;
