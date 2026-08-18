@@ -190,8 +190,21 @@ def test_recall_below_the_bar_forces_a_full_run():
 
 
 def test_recall_at_or_above_the_bar_permits_a_skip():
-    assert gate(_audit(hits=96, n=100)).decision == "SKIP_SAFE"
-    assert gate(_audit(hits=95, n=100)).decision == "SKIP_SAFE"
+    assert gate(_audit(hits=99, n=100)).decision == "SKIP_SAFE"
+
+
+def test_skip_needs_the_lower_bound_not_a_point_estimate():
+    v = gate(_audit(hits=95, n=100))
+    assert v.decision == "RUN_FULL"
+    assert "lower bound" in v.reason
+
+
+def test_a_perfect_tiny_sample_never_licenses_a_skip():
+    # the sympy 3/3 pathology, made executable: point estimate 1.0, but the
+    # one-sided 95% lower bound is ~0.53 — far below the bar
+    v = gate(_audit(hits=3, n=3))
+    assert v.decision == "RUN_FULL"
+    assert "lower bound" in v.reason
 
 
 def test_an_unmeasured_graph_never_permits_a_skip():

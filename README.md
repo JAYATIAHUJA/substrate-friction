@@ -59,8 +59,10 @@ years — it is not fixing itself.
 asks one question — *is this map proven good enough?* — and because today the
 honest answer is always no, it says: **run everything, don't gamble.** That
 refusal is the product working. The gate is not welded shut: the pass path
-(`SKIP_SAFE`, exit 0) exists and is tested — it opens the day a graph class
-clears the measured bar; no class has earned it yet.
+(`SKIP_SAFE`, exit 0) exists and is tested — it requires the measured
+recall's one-sided 95% lower bound to clear the bar, so no small-sample
+fluke can open it — and it unlocks the day a graph class earns that; none
+has yet.
 
 It plugs in three places, all built and working:
 

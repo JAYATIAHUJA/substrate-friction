@@ -95,7 +95,10 @@ def gate_repo(repo: Path, changed_files: list[str], arm: str = "arm_a",
     matched: set[str] = set()
     for name, node_id in index.items():
         for w, prefs in prefixes.items():
-            if any(name.startswith(pref) for pref in prefs if pref):
+            # module-boundary match: "core" must not bleed into "corex"
+            if any(name == pref or name.startswith(pref + ".")
+                   or name.startswith(pref + "::")
+                   for pref in prefs if pref):
                 changed_ids.add(node_id)
                 matched.add(w)
 
@@ -109,8 +112,10 @@ def gate_repo(repo: Path, changed_files: list[str], arm: str = "arm_a",
     import hashlib
     import subprocess
     h = hashlib.sha256()
+    for name in sorted(index):
+        h.update(f"{name};".encode())
     for u, v in sorted(g.edges):
-        h.update(f"{u},{v};".encode())
+        h.update(f"{by_id[u]}->{by_id[v]};".encode())
     graph_sha = h.hexdigest()[:16]
     try:
         repo_head = subprocess.run(
@@ -123,6 +128,22 @@ def gate_repo(repo: Path, changed_files: list[str], arm: str = "arm_a",
     from friction.cli import MANIFEST_PATH
     audit = audit_recall(MANIFEST_PATH, MANIFEST_PATH.parent, arm, k)
     verdict = gate(audit)
+    live_note = None
+    if changed_ids and len(matched) < len(wanted):
+        live_note = (f"{len(wanted) - len(matched)} changed file(s) matched no "
+                     f"symbol in this graph")
+    elif not changed_ids:
+        live_note = "no changed symbol resolved in this graph"
+    elif not test_ids:
+        live_note = "no test recognised in this graph"
+    elif not result.graph_complete:
+        live_note = "the walk was truncated (graph-incomplete)"
+    if live_note:
+        verdict = GateVerdict(
+            "RUN_FULL", verdict.measured_recall, verdict.n, arm, k,
+            verdict.threshold,
+            f"live abstention, independent of the corpus prior: {live_note} — "
+            f"refusing to license any skip on it")
 
     return LiveGate(
         repo=repo, graph_sha=graph_sha, repo_head=repo_head, arm=arm, k=k,
