@@ -361,8 +361,9 @@ proven good. Today, the honest verdict is always the same — run everything.</p
 </div>
 <figure class="term">
 <img src="plots/hero-terminal.svg" alt="Terminal: friction gate --live — engine selects 0 of 1 guarding tests, parity with offline walk is True, the engine itself proves the miss." loading="eager">
-<figcaption>A real capture: the engine executes the selection and proves the
-dropped guarding test. <a href="https://github.com/areycruzer/substrate-friction/blob/main/docs/captures/03-live-parity.txt">docs/captures/03-live-parity.txt</a></figcaption>
+<figcaption>A real recorded session, replayed: the corpus gate's verdict,
+the live in-engine gate proving the dropped test, and <code>friction
+verify</code>. <a href="https://github.com/areycruzer/substrate-friction/blob/main/docs/captures/10-hero-session.txt">docs/captures/10-hero-session.txt</a></figcaption>
 </figure>
 </div></header>
 
@@ -725,7 +726,7 @@ def _walkstage() -> str:
 {t(324, 166, "django__django-10097", 19, ink)}
 <line x1="324" y1="182" x2="636" y2="182" stroke="var(--line)"/>
 {t(324, 208, f"tests that catch this bug (the label): {w['guard']}", 12.5, body)}
-{t(324, 228, "the map does not get to see this — it is the answer key", 11, mute)}
+{t(324, 228, "the map never sees this — it's the answer key", 11, mute)}
 <rect class="pop" x="324" y="240" width="150" height="26" fill="{fill_a}"/>
 {t(399, 257, "THE ANSWER KEY", 10.5, "#0a0a0a", anchor="middle", weight="700", family=grot, extra=";letter-spacing:.1em")}
 </g>
@@ -737,15 +738,16 @@ def _walkstage() -> str:
 <rect class="ripple" x="118" y="186" width="44" height="44" fill="none" stroke="{fill_a}" stroke-dasharray="3 6" opacity=".6"/>
 <rect x="427" y="237" width="6" height="6" fill="{fill_y}"/>
 <rect x="467" y="157" width="6" height="6" fill="{fill_y}"/>
-{t(470, 190, "walk reached 2 tests — none of them guarding", 11, fill_y)}
+{t(430, 86, "walk reached 2 tests — none guarding", 11, fill_y)}
 <rect x="744" y="164" width="140" height="66" fill="none" stroke="{fill_a}" stroke-dasharray="5 4"/>
 <rect x="768" y="188" width="8" height="8" fill="none" stroke="{fill_a}"/>
 <rect x="806" y="206" width="8" height="8" fill="none" stroke="{fill_a}"/>
 <rect x="844" y="182" width="8" height="8" fill="none" stroke="{fill_a}"/>
-{t(814, 156, f"guarding tests — {w['sel']} of {w['guard']} reachable", 11, fill_a, anchor="middle", weight="600")}
+{t(814, 148, "guarding tests", 11.5, fill_a, anchor="middle", weight="700")}
+{t(814, 164, f"{w['sel']} of {w['guard']} reachable", 11.5, fill_a, anchor="middle", weight="700")}
 <line x1="566" y1="144" x2="740" y2="180" stroke="{fill_a}" stroke-dasharray="4 5"/>
 {t(654, 152, "✕", 15, fill_a, anchor="middle", weight="700")}
-{t(654, 246, "the edge that would connect them was never extracted", 11, mute, anchor="middle")}
+{t(654, 252, "the connecting edge was never extracted", 11, mute, anchor="middle")}
 </g>
 
 <g class="wg">
@@ -787,7 +789,7 @@ def _walkstage() -> str:
 <rect x="664" y="196" width="172" height="24" fill="var(--hover)"/>
 {t(750, 212, "gate_check → refuses", 10.5, fill_a, anchor="middle")}
 <path d="M340,180 C460,120 500,120 640,180" fill="none" stroke="{mute}"/>
-{t(490, 128, "asks first: is my map good enough to skip?", 11, body, anchor="middle")}
+{t(490, 108, "asks first: is my map good enough to skip?", 11, body, anchor="middle")}
 <path d="M640,236 C500,296 460,296 340,236" fill="none" stroke="{fill_a}" stroke-dasharray="5 4"/>
 {t(490, 300, "no — run everything", 11.5, fill_a, anchor="middle", weight="600")}
 <rect class="pop" x="144" y="240" width="172" height="24" fill="{fill_a}"/>
@@ -795,14 +797,14 @@ def _walkstage() -> str:
 </g>
 
 <g class="wg">
-<rect class="pop" x="220" y="120" width="380" height="30" fill="var(--bg)" stroke="var(--line)"/>
-{t(236, 140, f"shipped graphs re-audited — {w['aud_b']} arm B, {w['aud_a']} arm A ✓", 12, body)}
-<rect class="pop" style="transition-delay:.15s" x="220" y="160" width="380" height="30" fill="var(--bg)" stroke="var(--line)"/>
-{t(236, 180, "corpus summary re-derived from per-instance rows ✓", 12, body)}
-<rect class="pop" style="transition-delay:.3s" x="220" y="200" width="380" height="30" fill="var(--bg)" stroke="var(--line)"/>
-{t(236, 220, "docs · README · this site == the artifact ✓", 12, body)}
-{t(410, 286, "VERIFY OK", 30, fill_a, anchor="middle", weight="700")}
-{t(410, 312, "one command re-derives every number on this page", 12, mute, anchor="middle")}
+<rect class="pop" x="180" y="120" width="480" height="30" fill="var(--bg)" stroke="var(--line)"/>
+{t(196, 140, f"shipped graphs re-audited — {w['aud_b']} · {w['aud_a']} ✓", 12, body)}
+<rect class="pop" style="transition-delay:.15s" x="180" y="160" width="480" height="30" fill="var(--bg)" stroke="var(--line)"/>
+{t(196, 180, "corpus summary re-derived from per-instance rows ✓", 12, body)}
+<rect class="pop" style="transition-delay:.3s" x="180" y="200" width="480" height="30" fill="var(--bg)" stroke="var(--line)"/>
+{t(196, 220, "docs · README · this site == the artifact ✓", 12, body)}
+{t(420, 286, "VERIFY OK", 30, fill_a, anchor="middle", weight="700")}
+{t(420, 312, "one command re-derives every number on this page", 12, mute, anchor="middle")}
 </g>
 </svg>
 </div>

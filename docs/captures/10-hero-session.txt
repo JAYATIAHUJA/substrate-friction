@@ -1,0 +1,49 @@
+$ friction gate --arm arm_b
+[38;5;208;1m███████╗██╗   ██╗██████╗ ███████╗████████╗██████╗  █████╗ ████████╗███████╗[0m
+[38;5;208;1m██╔════╝██║   ██║██╔══██╗██╔════╝╚══██╔══╝██╔══██╗██╔══██╗╚══██╔══╝██╔════╝[0m
+[38;5;208;1m███████╗██║   ██║██████╔╝███████╗   ██║   ██████╔╝███████║   ██║   █████╗  [0m
+[38;5;208;1m╚════██║██║   ██║██╔══██╗╚════██║   ██║   ██╔══██╗██╔══██║   ██║   ██╔══╝  [0m
+[38;5;208;1m███████║╚██████╔╝██████╔╝███████║   ██║   ██║  ██║██║  ██║   ██║   ███████║[0m
+[38;5;208;1m╚══════╝ ╚═════╝ ╚═════╝ ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚══════╝[0m
+[1m   ███████╗██████╗ ██╗ ██████╗████████╗██╗ ██████╗ ███╗   ██╗[0m
+[1m   ██╔════╝██╔══██╗██║██╔════╝╚══██╔══╝██║██╔═══██╗████╗  ██║[0m
+[1m───█████╗  ██████╔╝██║██║        ██║   ██║██║   ██║██╔██╗ ██║[0m
+[1m───██╔══╝  ██╔══██╗██║██║        ██║   ██║██║   ██║██║╚██╗██║[0m
+[1m   ██║     ██║  ██║██║╚██████╗   ██║   ██║╚██████╔╝██║ ╚████║[0m
+[1m   ╚═╝     ╚═╝  ╚═╝╚═╝ ╚═════╝   ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝[0m
+[38;5;240mmeasure the map before you trust it[0m
+
+[38;5;240m────────────────────────────────────────────────────────────────────[0m
+[38;5;208;1m[FAIL][0m  [1mRUN_FULL[0m      [38;5;245marm=arm_b  k=6[0m
+[38;5;240m────────────────────────────────────────────────────────────────────[0m
+  measured test->fix recall : 0.545  (24/44 labelled instances)
+  bar for skipping          : 0.95
+
+  measured test->fix recall 0.545 on n=44 labelled instances is below the 0.95 bar: 45% of tests known to guard their fix are not reachable in this graph, so a skip would silently drop them
+
+  per repo:
+    django          24/44   0.55  [38;5;208m██████████[0m[38;5;240m········[0m
+
+  20 instances where the guarding test is unreachable. First 5:
+    django__django-10097
+    django__django-10880
+    django__django-11066
+    django__django-11138
+    django__django-11149
+[38;5;240m
+  replay one:  friction gate --instance django__django-10097[0m
+[38;5;240m────────────────────────────────────────────────────────────────────[0m
+
+$ friction gate --instance django__django-11551 --live
+[38;5;240m────────────────────────────────────────────────────────────────────[0m
+[38;5;208;1m  django__django-11551   LIVE — executed in the engine[0m
+[38;5;240m────────────────────────────────────────────────────────────────────[0m
+  loaded       : 28,353 nodes, 61,536 edges (+ CALLED_BY reverse) in 10421 ms
+  query        : MATCH (s {id: 920310000127})-[:CALLED_BY*1..6]->(n) RETURN n.id AS id
+                 engine 3.2 ms, 2 nodes reached
+  engine selected 0 of 1 guarding tests; offline walk agrees: parity=True
+[38;5;208;1m  DROPPED: 1 guarding test(s) — the engine itself proves the miss.[0m
+[38;5;240m────────────────────────────────────────────────────────────────────[0m
+
+$ friction verify
+[38;5;208;1mVERIFY OK:[0m shipped graphs re-audited (24/44, 15/30); corpus summary re-derived from per-instance rows; docs/README/site quote the artifact exactly.

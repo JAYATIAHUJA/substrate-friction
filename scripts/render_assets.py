@@ -5,7 +5,8 @@
 
 Emits:
   docs/plots/architecture.svg   — the pipeline diagram (hand-authored here)
-  docs/plots/hero-terminal.svg  — capture 03 rendered as a styled terminal
+  docs/plots/hero-terminal.svg  — capture 10 (a real FORCE_COLOR session)
+                                   replayed as an animated terminal
   docs/plots/budget-curves.svg  — S4 curves drawn from budget-curves.json
   docs/og.png, docs/favicon.png — via Pillow when available (skipped, with a
                                   notice, when it is not)
@@ -107,6 +108,131 @@ def hero_terminal(capture: Path) -> str:
                'repeatCount="indefinite"/></rect>')
     out.append('</svg>')
     return "".join(out)
+
+
+# -- the animated terminal: a REAL session, ANSI and all ---------------------
+#
+# docs/captures/10-hero-session.txt is an actual recorded run (FORCE_COLOR=1):
+# the corpus gate with the banner, the live in-engine gate on instance
+# django__django-11551, and friction verify. This builder parses the ANSI
+# back into coloured tspans and replays the session line by line on a loop
+# (16 s cycle) — a GIF of the tool as it really runs. Reduced-motion gets
+# the finished frame, statically.
+
+_ANSI_SGR = __import__("re").compile(r"\x1b\[([0-9;]*)m")
+_ANSI_256 = {"208": ACCENT, "220": "#f9c425", "240": "#4d4d4d",
+             "245": "#9a9a9a"}
+_CYCLE = 16.0
+_LH, _FS, _W, _PAD = 19, 12, 760, 14
+
+
+def _ansi_segments(line: str):
+    """Split one ANSI line into (text, color, bold) segments."""
+    segs, buf, cur = [], "", {"c": BODY, "b": False}
+    pos = 0
+    for m in _ANSI_SGR.finditer(line):
+        buf += line[pos:m.start()]
+        if buf:
+            segs.append((buf, cur["c"], cur["b"]))
+            buf = ""
+        parts = m.group(1).split(";")
+        i = 0
+        while i < len(parts):
+            p = parts[i]
+            if p == "0":
+                cur = {"c": BODY, "b": False}
+            elif p == "1":
+                cur["b"] = True
+            elif p == "38" and i + 2 < len(parts) and parts[i + 1] == "5":
+                col = _ANSI_256.get(parts[i + 2])
+                if col:
+                    cur["c"] = col
+                i += 2
+            i += 1
+        pos = m.end()
+    buf += line[pos:]
+    if buf:
+        segs.append((buf, cur["c"], cur["b"]))
+    return segs or [("", BODY, False)]
+
+
+def _curate(blocks):
+    """blocks = [(prompt, [lines])] → the lines the hero shows."""
+    out = []
+    for prompt, lines in blocks:
+        if "gate --arm" in prompt:          # banner + verdict, panel elided
+            banner = lines[:13]
+            verdict = [l for l in lines[13:] if "[FAIL]" in l]
+            out += [(prompt, banner + verdict)]
+        else:
+            out.append((prompt, lines))
+    return out
+
+
+def hero_terminal_ansi(session: Path) -> str:
+    raw = session.read_text(encoding="utf-8").splitlines()
+    blocks, prompt, buf = [], "$ ", []
+    for ln in raw:
+        if ln.startswith("$ "):
+            if buf:
+                blocks.append((prompt, buf))
+            prompt, buf = ln, []
+        else:
+            buf.append(ln)
+    if buf:
+        blocks.append((prompt, buf))
+    blocks = _curate(blocks)
+
+    rows = []
+    for prompt, lines in blocks:
+        rows.append(_ansi_segments(prompt))
+        rows.extend(_ansi_segments(l) for l in lines if l.strip() != "")
+        rows.append([("", BODY, False)])
+
+    n = len(rows)
+    h = 30 + 16 + n * _LH + 18
+    svg = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {_W} {h}" '
+        f'font-family="{MONO}" role="img" aria-label="real recorded session: '
+        f'friction gate (banner + verdict), the live in-engine gate, and '
+        f'friction verify">',
+        f'<rect width="{_W}" height="{h}" fill="{RAISED}" stroke="{LINE}"/>',
+        f'<rect width="{_W}" height="30" fill="{BG}"/>',
+        f'<text x="{_PAD}" y="20" fill="{MUTED}" font-size="11">'
+        f'substrate—friction — recorded session · 16 s loop</text>',
+        f'<style>',
+        f'@media (prefers-reduced-motion: reduce) '
+        f'{{ text.ln {{ animation: none !important; opacity: 1 !important; }} '
+        f'}}',
+    ]
+    for i in range(n):
+        k = 3 + i * (80.0 / n)                       # reveal slot, percent
+        svg.append(
+            f'@keyframes ln{i} {{ 0%, {k:.2f}% {{ opacity: 0; }} '
+            f'{k + 0.6:.2f}%, 95% {{ opacity: 1; }} 100% {{ opacity: 0; }} }}'
+            f' .k{i} {{ opacity: 1; animation: ln{i} {_CYCLE}s linear '
+            f'infinite; }}')
+    svg.append(f'</style>')
+
+    y = 52
+    for i, segs in enumerate(rows):
+        x = _PAD
+        parts = [f'<text class="ln k{i}" x="{x}" y="{y}" '
+                 f'font-size="{_FS}" xml:space="preserve">']
+        for text, color, bold in segs:
+            esc = (text.replace("&", "&amp;").replace("<", "&lt;")
+                       .replace(">", "&gt;"))
+            w = ' font-weight="700"' if bold else ""
+            parts.append(f'<tspan fill="{color}"{w}>{esc}</tspan>')
+        parts.append("</text>")
+        svg.append("".join(parts))
+        y += _LH
+    svg.append(
+        f'<rect class="ln k{n - 1}" x="{_PAD}" y="{y - 13}" width="8" '
+        f'height="15" fill="{ACCENT}"><animate attributeName="opacity" '
+        f'values="1;0;1" dur="1.1s" repeatCount="indefinite"/></rect>')
+    svg.append("</svg>")
+    return "".join(svg)
 
 
 def budget_svg(data: dict) -> str:
@@ -294,7 +420,7 @@ def main() -> None:
     PLOTS.mkdir(exist_ok=True)
     (PLOTS / "architecture.svg").write_text(architecture(), encoding="utf-8")
     (PLOTS / "hero-terminal.svg").write_text(
-        hero_terminal(Path("docs/captures/03-live-parity.txt")),
+        hero_terminal_ansi(Path("docs/captures/10-hero-session.txt")),
         encoding="utf-8")
     (PLOTS / "budget-curves.svg").write_text(
         budget_svg(json.loads(
