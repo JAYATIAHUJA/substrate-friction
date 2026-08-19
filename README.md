@@ -75,7 +75,11 @@ It plugs in three places, all built and working:
 
 Everything below is the deep version — how the map was measured, in a graph
 database, with every number re-checkable by one command. The presenter's
-plain-language cheat-sheet is [`docs/MINDMAP.md`](docs/MINDMAP.md).
+plain-language cheat-sheet is [`docs/MINDMAP.md`](docs/MINDMAP.md). The
+problem itself is not our claim: ten independent, citable facts — an
+acquired ML-test-skipping industry, measured CI-cost pressure, documented
+agent short-cutting, and an empty certification seat — are collected in
+[`docs/market.md`](docs/market.md).
 
 ---
 
@@ -459,7 +463,9 @@ Harrold 1998; Legunsen FSE 2016), call-graph recall studies (Sui ICSE 2020;
 PyCG ICSE 2021; *Total Recall?* ISSTA 2024), the 2026 agent-abstention
 literature, and the category incumbent whose otherwise-exemplary benchmarks
 measure everything downstream of its graph and never the graph itself — is in
-[`docs/related-work.md`](docs/related-work.md). What was reused from whom, and
+[`docs/related-work.md`](docs/related-work.md). Where the commercial
+selection market sits — and why it has no certification layer — is in
+[`docs/market.md`](docs/market.md). What was reused from whom, and
 what deliberately was not, is in [`docs/reuse-policy.md`](docs/reuse-policy.md).
 Deliberately deferred work is one honest sentence each in
 [`docs/future-work.md`](docs/future-work.md).
