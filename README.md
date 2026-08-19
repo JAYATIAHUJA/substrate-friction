@@ -46,23 +46,24 @@ Every figure names its scope; every figure is emitted by a committed script.
 
 ## The 60-second version (no jargon)
 
-AI coding tools save time by **skipping tests** they think don't matter. To
-decide, they use a **map of your code** — which function calls which. Nobody
-had ever checked whether that map is any good.
+Every AI coding agent wants more autonomy: pick which tests matter, ship on
+its own say-so. The question nobody can answer today is the triage question:
+**this edit — can the AI handle it, or does it need a human?**
 
-**We checked.** Against 172 real, human-verified bug fixes: the map leads to
-the one test that would catch the bug **42% of the time** (the quick map most
-tools use: 31%; on some projects: **0%**). And it's been this way for eight
-years — it is not fixing itself.
+The answer depends on one measurable thing: the **map of your code** the
+agent trusts. **We measured it.** Against 172 real, human-verified bug
+fixes, the map reaches the one test that would catch the bug **42% of the
+time** (the quick map most tools use: 31%; on some projects: **0%**) — and
+it has been that way for eight years, so it is not fixing itself.
 
-**So this tool is a seatbelt.** Before anything skips a test, `friction gate`
-asks one question — *is this map proven good enough?* — and because today the
-honest answer is always no, it says: **run everything, don't gamble.** That
-refusal is the product working. The gate is not welded shut: the pass path
-(`SKIP_SAFE`, exit 0) exists and is tested — it requires the measured
-recall's one-sided 95% lower bound to clear the bar, so no small-sample
-fluke can open it — and it unlocks the day a graph class earns that; none
-has yet.
+**So this tool is the triage.** Before any change goes autonomous,
+`friction gate` asks: *has this map earned autonomy?* The measured answer
+today is no — so it routes the change to **human verification: run
+everything, don't gamble.** That refusal is the triage working. The
+autonomous path (`SKIP_SAFE`, exit 0 — the AI can handle it) exists and is
+tested: it requires the measured recall's one-sided 95% lower bound to
+clear the bar, so no small-sample fluke can grant autonomy — and it unlocks
+the day a graph class earns that. None has yet.
 
 It plugs in three places, all built and working:
 

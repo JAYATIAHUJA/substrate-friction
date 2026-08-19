@@ -4,9 +4,10 @@ One page. If you can say this page, you can present to anyone.
 
 ## The whole thing in one sentence
 
-**AI coding tools skip tests using a map of your code — we measured the map,
-it's missing half the roads, and we built the seatbelt that stops anything
-from skipping until the map is proven good.**
+**AI coding agents want autonomy over verification — we built the triage
+that decides, per edit, whether the AI can handle it or a human stays in the
+loop: we measured the map they'd trust, it's missing half the roads, so until
+it's proven good, every change routes to human verification.**
 
 ## The story tree
 
@@ -27,9 +28,10 @@ THE DISCOVERY (what nobody checked)
    not getting better on its own.
 
 THE PRODUCT (the seatbelt)
-└─ `friction gate` — a check that runs BEFORE anything skips:
-   "Is this map good enough to trust?"  Measured answer: NO →
-   run everything. It refuses to gamble. That refusal IS the product.
+└─ `friction gate` — the decision that runs BEFORE anything goes
+   autonomous: "Has this map earned autonomy?" Measured answer:
+   NO → a human stays in the loop, run everything. It refuses to
+   gamble. That refusal IS the triage.
 
 WHERE IT PLUGS IN (three doors, all built)
 ├─ CI: blocks the merge if a tool tried to skip on a bad map
@@ -53,7 +55,7 @@ your mouth stays human.
 | call graph / code graph | **the map of your code** |
 | guarding test (FAIL_TO_PASS) | **the one test that catches that exact bug** |
 | recall | **hit rate** — how often the map finds that test |
-| RUN_FULL / exit 1 | **"run everything — don't gamble"** |
+| RUN_FULL / exit 1 | **"a human stays in the loop — run everything"** |
 | the gate | **the seatbelt** (a check before anything skips) |
 | arm A / arm B | **the quick map** (what tools actually use) vs **the careful map** (type-checked) |
 | graph-complete ≠ program-complete | **the map can be perfectly drawn and still missing roads** |
@@ -63,9 +65,10 @@ your mouth stays human.
 ## Three versions of the pitch
 
 **To anyone (10 seconds):**
-"AI coding tools skip tests to save time, using a map of your code. We
-measured the map — it misses more than half of what matters. Our tool is the
-seatbelt: nothing skips until the map is proven good."
+"AI agents want to decide what to verify on their own. We built the triage:
+one command asks whether the map under the agent has earned autonomy. We
+measured it — it misses more than half of what matters — so today every
+edit routes to a human. Prove the map, earn the autonomy."
 
 **To an engineer (30 seconds):**
 "Every agent builds a call graph by name-matching, and test selection walks
