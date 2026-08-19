@@ -19,8 +19,8 @@ from pathlib import Path
 
 PLOTS = Path("docs/plots")
 
-BG = "#0a0a0a"
-RAISED = "#121212"
+BG = "#000000"
+RAISED = "#0a0a0a"
 LINE = "#2e2e2e"
 ACCENT = "#ff571a"
 TEXT = "#ffffff"

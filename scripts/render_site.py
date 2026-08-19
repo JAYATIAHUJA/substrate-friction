@@ -33,11 +33,11 @@ def n(key: str) -> str:
 
 
 CSS = """
-:root{--bg:#0a0a0a;--raised:#121212;--hover:#202020;--line:#2e2e2e;
+:root{--bg:#000000;--raised:#0a0a0a;--hover:#202020;--line:#2e2e2e;
 --line-strong:#353535;--accent:#ff571a;--yellow:#f9c425;--text:#fff;
 --body:#dadada;--muted:#747474}
 *{margin:0;padding:0;box-sizing:border-box}
-::selection{background:var(--accent);color:#0a0a0a}
+::selection{background:var(--accent);color:#000000}
 ::-webkit-scrollbar{width:10px;background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--line-strong);border:2px solid
 var(--bg)}
@@ -70,8 +70,8 @@ color:var(--body);font-size:14px;font-weight:500}
 .btn:hover{border-color:var(--accent);color:var(--accent);
 text-decoration:none}
 .btn.primary{background:var(--accent);border-color:var(--accent);
-color:#0a0a0a}
-.btn.primary:hover{background:#e64d15;color:#0a0a0a}
+color:#000000}
+.btn.primary:hover{background:#e64d15;color:#000000}
 header.hero{padding:90px 0 60px;border-bottom:1px solid var(--line)}
 .hero-grid{display:grid;grid-template-columns:0.82fr 1.18fr;gap:44px;
 align-items:center}
@@ -808,7 +808,7 @@ def _walkstage() -> str:
 {t(324, 208, f"tests that catch this bug (the label): {w['guard']}", 12.5, body)}
 {t(324, 228, "the map never sees this — it's the answer key", 11, mute)}
 <rect class="pop" x="324" y="240" width="150" height="26" fill="{fill_a}"/>
-{t(399, 257, "THE ANSWER KEY", 10.5, "#0a0a0a", anchor="middle", weight="700", family=grot, extra=";letter-spacing:.1em")}
+{t(399, 257, "THE ANSWER KEY", 10.5, "#000000", anchor="middle", weight="700", family=grot, extra=";letter-spacing:.1em")}
 </g>
 
 <g class="wg">
@@ -848,7 +848,7 @@ def _walkstage() -> str:
 <line x1="524" y1="216" x2="580" y2="216" stroke="{mute}" stroke-dasharray="3 4"/>
 <rect x="580" y="100" width="300" height="220" fill="var(--bg)" stroke="{ln}"/>
 <rect x="580" y="100" width="300" height="30" fill="{fill_a}"/>
-{t(730, 120, "HydraDB · LIVE", 12, "#0a0a0a", anchor="middle", weight="700", family=grot, extra=";letter-spacing:.12em")}
+{t(730, 120, "HydraDB · LIVE", 12, "#000000", anchor="middle", weight="700", family=grot, extra=";letter-spacing:.12em")}
 {t(604, 160, f"the map, loaded: {w['edges']} connections", 12.5, ink)}
 {t(604, 184, "the check, as one bounded query:", 11.5, mute)}
 {t(604, 204, "MATCH (t:Test) WHERE count(*)>0 …", 11, body)}
@@ -873,7 +873,7 @@ def _walkstage() -> str:
 <path d="M640,236 C500,296 460,296 340,236" fill="none" stroke="{fill_a}" stroke-dasharray="5 4"/>
 {t(490, 300, "no — run everything", 11.5, fill_a, anchor="middle", weight="600")}
 <rect class="pop" x="144" y="240" width="172" height="24" fill="{fill_a}"/>
-{t(230, 256, "RUNS ALL — no skip shipped", 10, "#0a0a0a", anchor="middle", weight="700")}
+{t(230, 256, "RUNS ALL — no skip shipped", 10, "#000000", anchor="middle", weight="700")}
 </g>
 
 <g class="wg">
