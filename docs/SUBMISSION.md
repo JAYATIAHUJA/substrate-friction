@@ -47,6 +47,12 @@ finding (incoming variable-length MATCH rejected → materialised CALLED_BY).
 building and measuring, as attributed in the README. All commits inside the
 hackathon window; measurement scripts, artifacts and retractions committed.
 
+**Why this matters now (one sentence, for any "why you?" field):**
+The creator of Jenkins built a company on ML test-skipping and CloudBees
+bought it — skipping is where the industry is going, and nobody measures
+the map they skip on (the receipts: `docs/market.md`); we are the
+fail-closed tripwire that does, against human-verified ground truth.
+
 ## (b) Links
 
 - Repo: https://github.com/areycruzer/substrate-friction
