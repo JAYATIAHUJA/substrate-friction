@@ -7,14 +7,16 @@ Deadline 2026-08-20 23:59 PT · form: forms.gle/GrMYKxLj9zPQcqqc8 · submit on t
 **Project name:** Substrate Friction
 
 **One-paragraph description:**
-Every AI coding agent builds a graph of your repository first — and tools skip
-tests based on it. Substrate Friction measures the thing everyone assumes:
-whether that graph can actually reach the tests that guard a change. Against
+The triage question every team now faces: this edit — can the AI handle it,
+or does it need a human? Substrate Friction answers it by measuring the thing
+the answer depends on: the code graph under the agent, and whether it can
+actually reach the tests that guard a change. Against
 SWE-bench FAIL_TO_PASS labels (the guard is known), name-matched graphs reach
 it 31% of the time and full type resolution 42%, pooled over 172 instances in
 7 repositories — and the imprecision is flat across eight years of Django, a
 constant of the technique, not decay. `friction gate` turns that measurement
-into a fail-closed verdict (exit 1: RUN_FULL) delivered by CLI, HTTP, MCP,
+into a fail-closed triage verdict (exit 1: RUN_FULL — route to human
+verification) delivered by CLI, HTTP, MCP,
 SARIF, and a self-gating GitHub Action; `friction diff --live` makes HydraDB
 itself compute the headline anti-join (edge reification, 2.0 ms/edge, exact
 parity with the offline join enforced by exception); `friction verify`

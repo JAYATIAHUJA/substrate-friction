@@ -325,10 +325,10 @@ HEAD = f"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>substrate—friction · measure the graph before you trust it</title>
-<meta name="description" content="Graph-based test selection is unsafe in a way that is invisible from inside the tool. friction gate measures guarding-test recall against SWE-bench labels: {NUMS['pooled_b_recall']} pooled across 7 repos. Verdict: RUN_FULL.">
+<meta name="description" content="Agent triage, measured: does this edit need a human, or can the AI handle it? friction gate measures whether the graph under the agent can reach the tests that guard a change — {NUMS['pooled_b_recall']} recall pooled across 7 repos — and routes unproven maps to human verification. Verdict: RUN_FULL.">
 <link rel="canonical" href="https://areycruzer.github.io/substrate-friction/">
 <meta property="og:title" content="substrate—friction">
-<meta property="og:description" content="Before your tool skips a test, measure the graph it trusted. Guarding-test recall {NUMS['pooled_b_recall']} pooled / 7 repos — verdict RUN_FULL.">
+<meta property="og:description" content="Can the AI handle this edit? Ask the graph first. Guarding-test recall {NUMS['pooled_b_recall']} pooled / 7 repos — verdict RUN_FULL: route to human verification.">
 <meta property="og:image" content="https://areycruzer.github.io/substrate-friction/og.png">
 <meta property="og:type" content="website">
 <link rel="icon" type="image/png" href="favicon.png">
@@ -358,13 +358,14 @@ def body() -> str:
 {NAV}
 <header class="hero"><div class="wrap hero-grid">
 <div>
-<div class="micro">01 / TEST SELECTION SAFETY</div>
-<h1>Before your tool skips a test, measure the graph it trusted.<span class="caret" aria-hidden="true"></span></h1>
-<p>AI coding tools skip tests to save time, using a <b>map of your
-code</b> to decide what's safe. We measured the map against 172 real bug
-fixes — <b>it misses more than half of what matters.</b>
-<code>friction gate</code> is the seatbelt: nothing skips until the map is
-proven good. Today, the honest verdict is always the same — run everything.</p>
+<div class="micro">01 / AGENT TRIAGE</div>
+<h1>Can the AI handle this edit? Ask the graph first.<span class="caret" aria-hidden="true"></span></h1>
+<p>Every agent wants more autonomy — picking which tests matter, shipping on
+its own say-so. <b>The triage question: does this edit need a human?</b> The
+answer lives in one measurable thing: the <b>map of your code</b> the agent
+trusts. We measured it against 172 real bug fixes — <b>it misses more than
+half of what matters.</b> <code>friction gate</code> decides: until the map
+earns autonomy, the change routes to human verification — run everything.</p>
 <a class="btn primary" href="https://github.com/areycruzer/substrate-friction#quickstart">Run the gate</a>
 <a class="btn" href="walkthrough.html">Watch it on a real bug</a>
 <a class="btn" href="https://github.com/areycruzer/substrate-friction/blob/main/docs/gate.md">Read the measurement</a>
@@ -410,11 +411,11 @@ map.</p></div>
 <p>We checked it against 172 real bug fixes. The map reaches the one test
 that catches the bug less than half the time — and on some projects,
 never.</p></div>
-<div class="card"><div class="micro">THE SEATBELT</div>
-<p>So the gate asks one question before anything skips: <em>is this map
-proven good?</em> Until the answer is yes — run everything. The refusal is
-the product — and the pass path exists, tested, waiting for a graph class
-that earns it.</p></div>
+<div class="card"><div class="micro">THE TRIAGE</div>
+<p>So before any change goes autonomous, the gate asks: <em>has this map
+earned autonomy?</em> Until the answer is yes — a human stays in the loop,
+run everything. The refusal is the decision — and the autonomous path
+exists, tested, waiting for a graph class that earns it.</p></div>
 </div>
 </div></section>
 
@@ -953,8 +954,8 @@ bug ships, silently.</p>
 </div></section>
 
 <section><div class="wrap">
-<div class="micro">STEP 3 / THE SEATBELT REFUSES</div>
-<h2>The gate says: run everything.</h2>
+<div class="micro">STEP 3 / THE TRIAGE REFUSES</div>
+<h2>The gate says: a human verifies this.</h2>
 <p style="max-width:66ch">Before anything skips, <code>friction gate</code>
 asks: <em>has this class of map been proven good?</em> Measured over 172
 real bugs, its hit rate is 0.545 on Django and 0.419 pooled — far below the
