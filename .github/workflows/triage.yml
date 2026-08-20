@@ -27,6 +27,10 @@ jobs:
       - uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # DEMO: this PR sets the repo's POLICY bar to 0.30 — an operator
+          # decision, disclosed in the comment. The default safety bar is
+          # 0.95; at that bar this same evidence refuses (see PRs #1–#3).
+          threshold: '0.30'
 
   engine-parity:
     name: engine executes the selection (live HydraDB)
