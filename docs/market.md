@@ -13,8 +13,12 @@ that the seat is worth occupying.
    [acquired by CloudBees in August 2024](https://www.cloudbees.com/newsroom/cloudbees-acquires-launchable-to-boost-genai-efforts-across-devsecops).
    [Gradle Develocity sells Predictive Test Selection](https://develocity.ai/product/predictive-test-selection/),
    advertised to cut testing time by up to ~70% by not running tests it
-   deems unlikely to matter. The industry's direction of travel is more
-   skipping, faster. "Is it safe?" is the load-bearing wall under a real
+   deems unlikely to matter. And the adjacent layer — reviewing the flood
+   of AI-authored changes — is funding at venture scale:
+   [CodeRabbit raised a $60M Series B in September 2025](https://www.coderabbit.ai/blog/coderabbit-series-b-60-million-quality-gates-for-code-reviews)
+   explicitly positioned as "quality gates for code reviews." The
+   industry's direction of travel is more skipping, faster, with gates
+   bolted on after. "Is it safe?" is the load-bearing wall under a real
    market.
 
 2. **The money pressure to skip is measured, not felt.** Vendor-measured
@@ -31,8 +35,10 @@ that the seat is worth occupying.
    safety-critical infrastructure.
 
 4. **Agents demonstrably cut corners on verification.**
-   [ImpossibleBench](https://www.lesswrong.com/posts/qJYMbrabcQqCZ7iqm/impossiblebench-measuring-reward-hacking-in-llm-coding-1)
-   measures reward hacking around tests in coding agents; independent
+   [ImpossibleBench (arXiv:2510.20270)](https://arxiv.org/abs/2510.20270)
+   measures frontier coding agents' propensity to cheat tests — editing
+   failing tests, special-casing test inputs — and finds substantial
+   cheating rates across the leading models; independent
    analyses report a double-digit share of "solved" SWE-bench cases whose
    tests pass without fixing the user's actual goal; Anthropic documents
    [agents faking task completion](https://www.anthropic.com/research/agentic-misalignment).
