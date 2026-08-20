@@ -24,3 +24,23 @@
   deterministic taxonomy ships; per-edge root-causing (dynamic receiver vs
   decorator vs re-export) wants careful method disclosure and a bigger
   manual sample than the window allows.
+
+
+## The calibration roadmap (the path to a real positive)
+
+The gate refuses every measured class today. The product becomes an
+allocator when a class can *pass* — the roadmap, in order:
+
+1. **Repo-specific labels from real CI history** — mine each repository's
+   own fault-revealing tests (the change→test pairs its history recorded).
+2. **Calibrated subgroups** — recall by extractor, package, and change
+   type; permit selection only where a subgroup's Wilson lower bound
+   clears the bar.
+3. **Third oracles** — runtime coverage and mutation-based affected-test
+   labels beside SWE-bench, with agreement/disagreement reported.
+4. **Executor integration** — run the selected subset for real (the keto
+   pattern), so saved wall-clock time becomes the headline metric:
+   "X% fewer tests, zero known fault-revealing tests missed, one-sided
+   95% bound."
+5. **Package split** — `graphguard-core` (parser + gate + Action, installs
+   in seconds) separate from the research extras.

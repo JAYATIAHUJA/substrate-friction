@@ -187,6 +187,11 @@ blind on this change: unresolved files, no tests, or a truncated walk), and
 `triage/out-of-scope` (no Python signal — no clone, no graph, ~1 s). This
 repository dogfoods the action on its own PRs (`.github/workflows/triage.yml`).
 
+Two scope statements, so nothing overreads: *autonomy* here means autonomous
+**test selection** on a proven graph class — nothing is claimed about
+end-to-end agent outcomes; and the counts in the comment are graph symbols
+matching test markers, not framework-collected node IDs.
+
 Want to see the autonomous tier fire once? `uv run python scripts/unlock_demo.py`
 builds a **disclosed synthetic** 99/100 recall audit and shows the gate opening —
 `SKIP_SAFE`, exit 0 — the way a real graph class would have to earn it (the
@@ -474,7 +479,11 @@ claim:
   neighbourhood," and is always labelled so.
 - **A clean AUC ceiling** — label contamination is structural: SWE-Bench+
   (arXiv 2410.06992) measured 32.7% solution leakage / 31% weak tests; OpenAI
-  reports 59.4% of o3's Verified failures were test flaws.
+  reports 59.4% of o3's Verified failures were test flaws — and OpenAI has
+  since [stopped evaluating on SWE-bench
+  Verified](https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/)
+  for those reasons. FAIL_TO_PASS remains useful evidence for reachability;
+  it is not whole-CI ground truth, and we do not treat it as one.
 
 ## Limitations
 

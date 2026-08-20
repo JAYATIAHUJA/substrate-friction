@@ -170,3 +170,61 @@ def test_triage_no_python_pr_skips_the_gate(tmp_path, monkeypatch):
     r = T.triage("https://github.com/o/r/pull/9")
     assert r.tier == "out-of-scope"
     assert r.gate is None
+
+
+def test_deletion_only_pr_is_not_out_of_scope(tmp_path, monkeypatch):
+    """Removed .py files stay in the surface; the gate goes blind on them
+    (unmatched at head) and routes to needs-human — never 'out of scope'."""
+    mini = _mini_repo(tmp_path)
+
+    def fake_gh(path, token=None):
+        if "/files" in path:
+            return [{"filename": "core.py", "status": "removed"}]
+        if path.endswith("/pulls/5"):
+            return {"head": {"ref": "patch"}}
+        raise AssertionError(path)
+
+    def fake_clone(slug, dest, pr_number=None, branch=None):
+        # at the PR head, core.py is GONE (the PR deletes it)
+        for f in mini.iterdir():
+            if f.name == "core.py":
+                continue
+            (dest / f.name).write_text(f.read_text(), encoding="utf-8")
+
+    monkeypatch.setattr(T, "_gh", fake_gh)
+    monkeypatch.setattr(T, "_shallow_clone", fake_clone)
+    r = T.triage("https://github.com/o/r/pull/5")
+    assert r.tier == "needs-human"
+    assert r.gate is not None
+    assert r.gate.changed_symbols == 0          # nothing resolved: blind
+
+
+def test_truncated_change_surface_forces_needs_human(monkeypatch):
+    """>300 files: the surface is incomplete → insufficient evidence,
+    never a quiet partial measurement."""
+    import friction.triage as tri
+
+    def fake_files(slug, number, token=None):
+        return [f"f{i}.py" for i in range(tri.PR_FILE_CAP + 5)], False
+
+    monkeypatch.setattr(tri, "_pr_files", fake_files)
+    r = tri.triage("https://github.com/o/r/pull/9")
+    assert r.tier == "needs-human"
+    assert "truncated" in r.blurb
+
+
+def test_issue_without_named_files_is_needs_human(monkeypatch):
+    """No .py mentions in an issue = localization failure, not out-of-scope."""
+    import friction.triage as tri
+
+    def fake_gh(path, token=None):
+        if "/issues/3" in path:
+            return {"title": "something broke", "body": "no paths here"}
+        if path == "/repos/o/r":
+            return {"default_branch": "main"}
+        raise AssertionError(path)
+
+    monkeypatch.setattr(tri, "_gh", fake_gh)
+    r = tri.triage("https://github.com/o/r/issues/3")
+    assert r.tier == "needs-human"
+    assert "do not guess" in r.blurb
