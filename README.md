@@ -156,7 +156,8 @@ fix-file candidates), the live gate, and a four-tier verdict:
 friction triage https://github.com/fastapi/fastapi/pull/16159
 # tier: human-verification — blast radius 23 of 846 tests, prior + bound, exit 1
 friction triage https://github.com/fastapi/fastapi/issues/16010
-# issues: fix files from disclosed text mentions (fail-closed regardless)
+# issues that NAME their files: disclosed text mentions (fail-closed regardless);
+# issues that name none are triaged out-of-scope — we do not guess
 ```
 
 Or install it on any repository as a GitHub Action — every PR gets a triage
@@ -185,6 +186,12 @@ radius, selected tests, prior and bound), `triage/needs-human` (the gate is
 blind on this change: unresolved files, no tests, or a truncated walk), and
 `triage/out-of-scope` (no Python signal — no clone, no graph, ~1 s). This
 repository dogfoods the action on its own PRs (`.github/workflows/triage.yml`).
+
+Want to see the autonomous tier fire once? `uv run python scripts/unlock_demo.py`
+builds a **disclosed synthetic** 99/100 recall audit and shows the gate opening —
+`SKIP_SAFE`, exit 0 — the way a real graph class would have to earn it (the
+Wilson lower bound clearing the bar). No measured class is there yet; the demo
+exists so the unlock is visible, not hypothetical.
 
 ### Use it from a coding agent (MCP)
 

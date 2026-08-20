@@ -34,10 +34,17 @@ runs:
           PR_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${{ github.event.pull_request.number }}"
         fi
         echo "triaging $PR_URL"
-        # exit 1 is the product (a human stays in the loop) — never fail the workflow on it
-        uvx --from "git+https://github.com/areycruzer/substrate-friction@main" \
-          friction triage "$PR_URL" --json-out triage.json > comment.md || true
+        # exit 1 is the product (a human stays in the loop). Anything above
+        # 1 is a real crash and MUST fail the workflow.
+        set +e
+        uvx --from "git+https://github.com/areycruzer/substrate-friction@bb27220506bd83f5864ff4b835c02999108acd16" \
+          friction triage "$PR_URL" --json-out triage.json > comment.md
+        code=$?
+        set -e
         cat comment.md
+        if [ "$code" -gt 1 ]; then
+          echo "::error::friction triage crashed (exit $code)"; exit "$code"
+        fi
         echo "label=$(jq -r .label triage.json)" >> "$GITHUB_OUTPUT"
 
     - name: Ensure the triage labels exist
