@@ -1,0 +1,24 @@
+name: Triage
+
+# The repo that triages graphs triages itself: every PR gets the same
+# fail-closed verdict any other repo would get — label + comment, emitted
+# by the gate itself. Uses the shipped composite action by local path;
+# external repos use `areycruzer/substrate-friction@main`.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4   # the action lives in this repo
+      - uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

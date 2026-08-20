@@ -1,0 +1,89 @@
+name: 'substrate—friction triage'
+description: >-
+  Label every PR: human verification or AI autonomy — measured, fail-closed.
+  The gate builds the change's call graph, walks the tests, and applies the
+  measured class prior. The ai-autonomy label requires the recall's one-sided
+  95% Wilson lower bound to clear the bar; everything else routes to a human.
+branding:
+  icon: 'shield'
+  color: 'orange'
+
+inputs:
+  github-token:
+    description: 'A token with issues:write + pull-requests:write'
+    required: true
+  pr-url:
+    description: 'The PR URL (defaults to the triggering pull_request event)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+
+    - name: Run the triage (one gate run — markdown comment + JSON)
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        PR_URL: ${{ inputs.pr-url }}
+      run: |
+        set -u
+        if [ -z "$PR_URL" ]; then
+          PR_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${{ github.event.pull_request.number }}"
+        fi
+        echo "triaging $PR_URL"
+        # exit 1 is the product (a human stays in the loop) — never fail the workflow on it
+        uvx --from "git+https://github.com/areycruzer/substrate-friction@main" \
+          friction triage "$PR_URL" --json-out triage.json > comment.md || true
+        cat comment.md
+        echo "label=$(jq -r .label triage.json)" >> "$GITHUB_OUTPUT"
+
+    - name: Ensure the triage labels exist
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        repo="$GITHUB_REPOSITORY"
+        gh label create "triage/ai-autonomy"        --repo "$repo" --color 1A7F37 --description "the measured recall's lower bound cleared the bar — autonomous test selection earned" || true
+        gh label create "triage/human-verification" --repo "$repo" --color D93F0B --description "the map class has not earned autonomy — keep a human in the loop, run full verification" || true
+        gh label create "triage/needs-human"        --repo "$repo" --color BBBBBB --description "the gate is blind on this change (unmatched files / no tests / truncated walk)" || true
+        gh label create "triage/out-of-scope"       --repo "$repo" --color CCCCCC --description "no Python signal in the change surface" || true
+
+    - name: Apply the label (swapping any previous triage label)
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_URL: ${{ inputs.pr-url }}
+      run: |
+        set -u
+        pr="${PR_URL:-${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${{ github.event.pull_request.number }}}"
+        new_label=$(jq -r .label triage.json)
+        n="${pr##*/}"
+        # remove any triage/* label that is not the new one
+        for l in $(gh pr view "$n" --json labels --jq '.[].name' | grep '^triage/' || true); do
+          if [ "$l" != "$new_label" ]; then gh pr edit "$n" --remove-label "$l"; fi
+        done
+        gh pr edit "$n" --add-label "$new_label"
+
+    - name: Post or update the verdict comment
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_URL: ${{ inputs.pr-url }}
+      run: |
+        set -u
+        pr="${PR_URL:-${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${{ github.event.pull_request.number }}}"
+        n="${pr##*/}"
+        marker="<!-- substrate-friction-triage -->"
+        printf '\n%s\n' "$marker" >> comment.md
+        # find our previous comment, edit it; otherwise post a new one
+        cid=$(gh api "repos/$GITHUB_REPOSITORY/issues/$n/comments" \
+                --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -1)
+        if [ -n "$cid" ]; then
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" \
+            -f body="$(cat comment.md)" >/dev/null
+        else
+          gh pr comment "$n" --body-file comment.md >/dev/null
+        fi

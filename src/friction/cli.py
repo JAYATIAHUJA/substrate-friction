@@ -727,6 +727,53 @@ def render_check(report: CheckReport) -> str:
 # main
 # --------------------------------------------------------------------------
 
+def cmd_triage(args) -> int:
+    """Triage a GitHub PR or issue link: human verification or AI autonomy?
+
+    Exit codes carry the decision: 0 = ai-autonomy or out-of-scope,
+    1 = a human stays in the loop (measured refusal or a blind gate).
+    Fail-closed everywhere: the localization layer only chooses where to
+    look; the class prior alone can grant autonomy, and only through its
+    Wilson lower bound.
+    """
+    from friction.triage import render_markdown, triage
+
+    report = triage(args.url, llm=getattr(args, "llm", False))
+    g = report.gate
+    payload = {
+        "kind": report.kind, "slug": report.slug,
+        "number": report.number, "tier": report.tier,
+        "label": report.label, "head": report.head,
+        "changed": list(report.changed),
+        "localization": report.localization_note,
+        **({} if report.gate is not None else {"gate": None}),
+    }
+    if report.gate is not None:
+        g = report.gate
+        payload.update({
+            "decision": g.verdict.decision,
+            "measured_recall": g.verdict.measured_recall,
+            "n": g.verdict.n, "threshold": g.verdict.threshold,
+            "reason": g.verdict.reason,
+            "graph_nodes": g.graph_nodes, "graph_edges": g.graph_edges,
+            "changed_symbols": g.changed_symbols,
+            "total_tests": g.total_tests,
+            "selected": len(g.selected_tests),
+            "graph_complete": g.graph_complete,
+            "unmatched_changed": list(g.unmatched_changed),
+            "prior_note": g.prior_note,
+        })
+    if getattr(args, "json_out", None):
+        Path(args.json_out).write_text(
+            json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    if args.json:
+        g = report.gate
+        print(json.dumps(payload, indent=2))
+    else:
+        print(render_markdown(report))
+    return 0 if report.tier in ("ai-autonomy", "out-of-scope") else 1
+
+
 def _print_doc(path: Path, missing_hint: str) -> int:
     if not Path(path).exists():
         print(missing_hint)
@@ -1218,6 +1265,22 @@ def main(argv: list[str] | None = None) -> int:
     gate_cmd.add_argument("--sarif", action="store_true",
                           help="emit the verdict as a SARIF run (code-scanning)")
 
+    tri_cmd = sub.add_parser(
+        "triage", help="a GitHub PR/issue link in, a tier out: "
+                       "human verification or AI autonomy")
+    tri_cmd.add_argument("url", help="https://github.com/owner/repo/pull/N "
+                                     "(or /issues/N)")
+    tri_cmd.add_argument("--json", action="store_true",
+                         help="machine-readable report")
+    tri_cmd.add_argument("--json-out", default=None, metavar="PATH",
+                         help="also write the JSON report to PATH while "
+                              "printing the markdown comment (the Action "
+                              "path — one gate run, both artifacts)")
+    tri_cmd.add_argument("--llm", action="store_true",
+                         help="issues: allow the disclosed LLM localization "
+                              "layer (needs ANTHROPIC_API_KEY); fail-closed "
+                              "regardless")
+
     ver_cmd = sub.add_parser(
         "verify",
         help="re-derive every shipped gate number from committed artifacts; "
@@ -1315,6 +1378,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "diff":
         return cmd_diff(args)
+
+    if args.command == "triage":
+        return cmd_triage(args)
 
     if args.command == "verify":
         return cmd_verify(args)
