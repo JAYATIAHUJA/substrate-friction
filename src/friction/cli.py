@@ -738,7 +738,7 @@ def cmd_triage(args) -> int:
     """
     from friction.triage import render_markdown, triage
 
-    report = triage(args.url, llm=getattr(args, "llm", False))
+    report = triage(args.url)
     g = report.gate
     payload = {
         "kind": report.kind, "slug": report.slug,
@@ -1276,10 +1276,6 @@ def main(argv: list[str] | None = None) -> int:
                          help="also write the JSON report to PATH while "
                               "printing the markdown comment (the Action "
                               "path — one gate run, both artifacts)")
-    tri_cmd.add_argument("--llm", action="store_true",
-                         help="issues: allow the disclosed LLM localization "
-                              "layer (needs ANTHROPIC_API_KEY); fail-closed "
-                              "regardless")
 
     ver_cmd = sub.add_parser(
         "verify",
