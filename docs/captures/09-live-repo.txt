@@ -1,4 +1,4 @@
-$ friction gate --repo src --changed friction/gate.py
+$ friction gate --repo . --changed src/friction/gate.py
 [38;5;208;1m███████╗██╗   ██╗██████╗ ███████╗████████╗██████╗  █████╗ ████████╗███████╗[0m
 [38;5;208;1m██╔════╝██║   ██║██╔══██╗██╔════╝╚══██╔══╝██╔══██╗██╔══██╗╚══██╔══╝██╔════╝[0m
 [38;5;208;1m███████╗██║   ██║██████╔╝███████╗   ██║   ██████╔╝███████║   ██║   █████╗  [0m
@@ -14,18 +14,27 @@ $ friction gate --repo src --changed friction/gate.py
 [38;5;240mmeasure the map before you trust it[0m
 
 [38;5;240m────────────────────────────────────────────────────────────────────[0m
-[38;5;208;1m[FAIL][0m  [1mRUN_FULL[0m      [38;5;245msrc  arm=arm_a  k=6[0m
+[38;5;208;1m[FAIL][0m  [1mRUN_FULL[0m      [38;5;245m  arm=arm_a  k=6[0m
 [38;5;240m────────────────────────────────────────────────────────────────────[0m
-  graph            : 417 nodes, 593 edges
+  graph            : 96,007 nodes, 123,985 edges
   changed symbols  : 17
-  tests in repo    : 27
-  tests selected   : 1
+  tests in repo    : 19,926
+  tests selected   : 38
   graph-complete   : True
 
   measured test->fix recall 0.500 on n=30 labelled instances is below the 0.95 bar: 50% of tests known to guard their fix are not reachable in this graph, so a skip would silently drop them
 
-  Recall 0.500 is the value measured for 'arm_a'-class graphs on the labelled corpus (n=30), not a measurement on src. An unlabelled repository cannot yield a recall figure; this is that class's prior, applied. Per-repo recall spans 0.50–0.50 across 1 repo; the pooled one-sided 95% lower bound is 0.356.
+  Recall 0.500 is the value measured for 'arm_a'-class graphs on the labelled corpus (n=30), not a measurement on . An unlabelled repository cannot yield a recall figure; this is that class's prior, applied. Per-repo recall spans 0.50–0.50 across 1 repo; the pooled one-sided 95% lower bound is 0.356.
 
   selected (first 10):
-    friction.gate::select_tests
+    tests.test_gate::test_a_changed_node_absent_from_the_graph_selects_nothing
+    tests.test_gate::test_a_changed_node_that_is_itself_a_test_is_selected
+    tests.test_gate::test_a_cycle_terminates
+    tests.test_gate::test_an_unlisted_instance_is_not_silently_assigned
+    tests.test_gate::test_audit_can_be_restricted_to_one_half
+    tests.test_gate::test_audit_counts_a_reachable_guarding_test_as_a_hit
+    tests.test_gate::test_audit_counts_an_unreachable_guarding_test_as_a_miss
+    tests.test_gate::test_audit_groups_by_repo_prefix
+    tests.test_gate::test_audit_skips_an_instance_whose_graph_file_is_absent
+    tests.test_gate::test_audit_skips_instances_with_an_empty_endpoint_set
 [38;5;240m────────────────────────────────────────────────────────────────────[0m
