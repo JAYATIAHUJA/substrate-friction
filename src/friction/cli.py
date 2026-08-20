@@ -792,6 +792,9 @@ def cmd_gate(args) -> int:
     from friction.gate import SAFE_SKIP_RECALL, audit_recall
     from friction.gate import gate as run_gate
 
+    if getattr(args, "distance", False):
+        return _gate_distance(args)
+
     if args.repo:
         return _gate_live(args)
     if args.instance:
@@ -890,6 +893,82 @@ def cmd_gate(args) -> int:
             f"\n  replay one:  friction gate --instance {audit.misses[0]}"))
     print(tui.rule())
     return 0 if verdict.decision == "SKIP_SAFE" else 1
+
+
+def _gate_distance(args) -> int:
+    """Every measured class's distance from the skip bar — the chances,
+    computed. Numbers come from data/shipped/gate-results.json (committed,
+    re-derivable by `friction verify`); nothing here is estimated."""
+    import math
+    from friction.gate import SAFE_SKIP_RECALL, wilson_lb
+
+    d = json.loads(Path("data/shipped/gate-results.json")
+                   .read_text(encoding="utf-8"))
+    bar = (args.threshold if args.threshold is not None
+           else SAFE_SKIP_RECALL)
+
+    def n_needed(recall: float, bar: float) -> int:
+        if wilson_lb(1, 1) < bar and recall < 1.0:
+            pass
+        for n in range(1, 100_000):
+            hits = round(recall * n)
+            if wilson_lb(hits, n) >= bar:
+                return n
+        return -1
+
+    perfect_n = math.ceil((1.645 ** 2) * bar / (1 - bar))
+    from friction import tui
+    if tui.styling():
+        print(tui.banner())
+    print(tui.rule())
+    print(tui.head("  THE DISTANCE TO AUTONOMY") +
+          f"      bar = {bar:.2f}")
+    print(tui.rule())
+    print(f"  {'class':34s} {'recall':>7s} {'LB95':>7s} {'gap':>7s}"
+          f"  {'clears at'}")
+    print("  " + "-" * 78)
+    rows = []
+    pooled = d["summary"]["pooled"]
+    for arm, label in (("arm_a", "name-matched (pooled)"),
+                       ("arm_b", "type-resolved (pooled)")):
+        h, n = pooled[arm]["hits"], pooled[arm]["n"]
+        rows.append((label, h, n))
+    per_repo: dict[str, list] = {}
+    for r in d["per_instance"]:
+        for arm in ("arm_a", "arm_b"):
+            if r.get(arm):
+                cell = per_repo.setdefault(f"{r['repo']} · {arm}", [0, 0])
+                cell[0] += 1 if r[arm]["hit"] else 0
+                cell[1] += 1
+    for label, (h, n) in sorted(per_repo.items(), key=lambda kv: -kv[1][0] / kv[1][1]):
+        rows.append((label, h, n))
+    for label, h, n in rows:
+        r_ = h / n if n else 0.0
+        lb = wilson_lb(h, n)
+        need = n_needed(r_, bar)
+        if lb >= bar:
+            need_s = "this class CLEARS the bar"
+        elif r_ < bar:
+            need_s = (f"never at this recall "
+                      f"(bound → {r_:.2f} as n → ∞)")
+        else:
+            need_s = f"{need:,} instances at this recall"
+        print(f"  {label:34s} {h/n if n else 0:7.3f} {lb:7.3f} "
+              f"{max(0.0, bar - lb):7.3f}  {need_s}")
+    print("  " + "-" * 78)
+    print(f"  a PERFECT record clears {bar:.2f} at n ≥ {perfect_n} "
+          f"(n/(n+z²) ≥ bar); at n=3 the bound is "
+          f"{wilson_lb(3, 3):.3f} — which is why 3/3 refuses.")
+    print()
+    print("  The chance of SKIP_SAFE is zero wherever gap > 0 — by "
+          "measurement, not by policy. Raising it honestly takes one of:")
+    print("    1. a graph class whose measured LB clears the bar "
+          "(better graphs: type-resolved live, dynamic traces, deeper k)")
+    print("    2. a repo's own labelled CI history (the calibration "
+          "roadmap, docs/future-work.md)")
+    print("    3. an operator policy bar — disclosed, as PR #4 exhibits")
+    print(tui.rule())
+    return 0
 
 
 def _gate_replay(args) -> int:
@@ -1255,6 +1334,10 @@ def main(argv: list[str] | None = None) -> int:
                           help="restrict to one half of the pinned split")
     gate_cmd.add_argument("--repo", type=Path, default=None,
                           help="gate a real repository instead of the corpus")
+    gate_cmd.add_argument("--distance", action="store_true",
+                          help="print every measured class's distance from "
+                               "the skip bar, and the audit that would clear "
+                               "it — the chances, computed")
     gate_cmd.add_argument("--changed", nargs="*", default=[],
                           help="changed file paths, relative to --repo")
     gate_cmd.add_argument("--live", action="store_true",

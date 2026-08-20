@@ -132,6 +132,7 @@ git clone https://github.com/areycruzer/substrate-friction && cd substrate-frict
 friction gate --arm arm_b                    # the verdict (exit 1: RUN_FULL)
 friction gate --instance django__django-11551 --live   # engine executes it, parity asserted
 friction diff --live                         # the anti-join, in-engine
+friction gate --distance                     # every class's distance from the bar — the chances, computed
 friction verify                              # re-derive every shipped figure
 ```
 
