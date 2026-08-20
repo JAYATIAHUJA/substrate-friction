@@ -82,8 +82,8 @@ that the seat is worth occupying.
     recall of labelled bug-revealing tests as a gate *before* selection.
     The closest research is the ISSTA 2024 methodology (Java, dynamic
     ground truth, no product). Fail-closed graph-backed selection itself
-    is NOT unclaimed — keto and Seismic ship versions of it in this very
-    hackathon — and Launchable/Develocity trust their own prediction
+    is NOT unclaimed — other entries in this very hackathon ship versions
+    of it — and Launchable/Develocity trust their own prediction
     histories. What is empty is the labelled-recall certification layer
     for agent-style repo maps. That narrower seat is the one occupied.
 
