@@ -94,33 +94,37 @@ def parse_target(url: str) -> tuple[str, str, int]:
     return m.group(1), kind, int(m.group(3))
 
 
+PR_FILE_PAGE = 100
+PR_FILE_CAP = 300   # beyond this the change surface is disclosed-truncated
+
+
 def _pr_files(slug: str, number: int, token: str | None) -> list[str]:
-    rows = _gh(f"/repos/{slug}/pulls/{number}/files?per_page=100", token)
-    return [r["filename"] for r in rows if r.get("status") != "removed"]
+    out: list[str] = []
+    page = 1
+    while len(out) < PR_FILE_CAP:
+        rows = _gh(f"/repos/{slug}/pulls/{number}/files"
+                   f"?per_page={PR_FILE_PAGE}&page={page}", token)
+        out += [r["filename"] for r in rows if r.get("status") != "removed"]
+        if len(rows) < PR_FILE_PAGE:
+            break
+        page += 1
+    return out[:PR_FILE_CAP]
 
 
-def _issue_files(slug: str, number: int, token: str | None,
-                 llm: bool = False) -> tuple[list[str], str]:
-    """Where would this issue's fix land? Disclosed, fail-closed upstream."""
+def _issue_files(slug: str, number: int,
+                 token: str | None) -> tuple[list[str], str]:
+    """Where would this issue's fix land? Disclosed, fail-closed upstream.
+
+    Issue triage uses the paths the issue itself names — no prediction
+    layer. (An LLM localizer is future work; it is not advertised here.)
+    """
     issue = _gh(f"/repos/{slug}/issues/{number}", token)
     body = (issue.get("body") or "") + "\n" + issue.get("title", "")
-    if llm and os.environ.get("ANTHROPIC_API_KEY"):
-        try:
-            return _llm_files(slug, body, token), (
-                "fix files predicted by an LLM from the issue text — "
-                "DISCLOSED heuristic layer; the gate below stays fail-closed "
-                "regardless of prediction quality")
-        except Exception as exc:            # noqa: BLE001 — fall through
-            print(f"  (llm localization unavailable: {exc}; using mentions)")
     mentioned = sorted(set(re.findall(r"([\w./-]+\.py)\b", body)))
     return mentioned, (
         f"fix files taken from {len(mentioned)} path(s) mentioned in the "
         "issue text — DISCLOSED heuristic; the gate below stays fail-closed "
         "regardless of prediction quality")
-
-
-def _llm_files(slug: str, body: str, token: str | None) -> list[str]:
-    raise NotImplementedError("LLM localization is future work; see docs")
 
 
 def _shallow_clone(slug: str, dest: Path, pr_number: int | None = None,
@@ -160,7 +164,7 @@ def classify(gate: LiveGate, changed: list[str]) -> str:
     return "human-verification"
 
 
-def triage(url: str, *, token: str | None = None, llm: bool = False,
+def triage(url: str, *, token: str | None = None,
            keep: Path | None = None) -> TriageReport:
     slug, kind, number = parse_target(url)
     token = token or os.environ.get("GITHUB_TOKEN")
@@ -172,7 +176,7 @@ def triage(url: str, *, token: str | None = None, llm: bool = False,
         note = "fix sites are the PR's real changed files"
     else:
         ref = _default_branch(slug, token)
-        changed, note = _issue_files(slug, number, token, llm)
+        changed, note = _issue_files(slug, number, token)
 
     # 2. nothing to measure? no clone, no graph — out of scope, honestly
     if not changed or not any(f.endswith(".py") for f in changed):
