@@ -126,6 +126,9 @@ def create_app(live: bool = True) -> FastAPI:
         if arm not in {"arm_a", "arm_b"}:
             raise HTTPException(status_code=400,
                                 detail="arm must be arm_a or arm_b")
+        if threshold is not None and not 0.0 < threshold <= 1.0:
+            raise HTTPException(status_code=400,
+                                detail="threshold must be in (0, 1]")
 
         manifest = cli.MANIFEST_PATH
         audit = audit_recall(manifest, manifest.parent, arm, k)

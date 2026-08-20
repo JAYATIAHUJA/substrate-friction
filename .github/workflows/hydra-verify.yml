@@ -108,4 +108,4 @@ jobs:
       - name: Engine-marked tests against a clean store
         run: |
           npm i -g @sourcegraph/scip-python >/dev/null 2>&1
-          uv run pytest -q -m engine
+          FRICTION_REQUIRE_ENGINE=1 uv run pytest -q -m engine

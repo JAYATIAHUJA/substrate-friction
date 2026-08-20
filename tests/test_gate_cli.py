@@ -174,3 +174,40 @@ def test_production_names_are_never_tests():
     assert _is_test("test_core::test_helper")            # flat layout
     assert _is_test("src.pkg.tests.test_x::run")         # src layout
     assert _is_test("conftest::fixture_helper")
+
+
+# ── adversarial-input hardening (found by the final roast run) ────────────
+
+
+def test_gate_rejects_a_nonsense_threshold(capsys):
+    """A recall bar outside (0, 1] can never be a meaningful criterion —
+    the roast run showed --threshold 1.5 was silently accepted."""
+    code = main(["gate", "--threshold", "1.5"])
+    assert code == 2
+    assert "(0, 1]" in capsys.readouterr().err
+
+
+def test_gate_rejects_a_zero_threshold(capsys):
+    assert main(["gate", "--threshold", "0"]) == 2
+
+
+def test_gate_function_rejects_a_nonsense_threshold():
+    from friction.gate import gate as run_gate
+    audit = audit_recall(MANIFEST_PATH, MANIFEST_PATH.parent, "arm_b", 6)
+    with pytest.raises(ValueError):
+        run_gate(audit, 1.5)
+
+
+def test_gate_endpoint_rejects_a_nonsense_threshold():
+    r = _client().get("/gate", params={"threshold": 2.0})
+    assert r.status_code == 400
+
+
+def test_triage_reports_a_non_url_without_a_traceback(capsys):
+    """The roast run crashed `friction triage not-a-url` with a raw
+    ValueError traceback. A triage product must refuse garbage gracefully."""
+    code = main(["triage", "not-a-url-at-all"])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "not a github" in err.lower()
+    assert "e.g." in err
