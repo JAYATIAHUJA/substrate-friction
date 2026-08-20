@@ -4,6 +4,11 @@ name: Triage
 # fail-closed verdict any other repo would get — label + comment, emitted
 # by the gate itself. Uses the shipped composite action by local path;
 # external repos use `areycruzer/substrate-friction@main`.
+#
+# The second job is deliberate: the PR label runs on the local name-matched
+# arm for portability, so EVERY triage run also boots the pinned HydraDB
+# engine and executes the selection INSIDE it with parity asserted —
+# "remove HydraDB from this workflow and what breaks" has a visible answer.
 
 on:
   pull_request:
@@ -22,3 +27,41 @@ jobs:
       - uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  engine-parity:
+    name: engine executes the selection (live HydraDB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync
+        run: uv sync
+      - name: Start pinned HydraDB
+        # hydradb#101 discipline: provision the local-dev token before
+        # compose up, or the bind-mount becomes an empty directory.
+        run: |
+          mkdir -p secrets && printf 'local-development-token-32-bytes' > secrets/token
+          mkdir -p hydradb-data/graph minio-data
+          sudo chown -R 10001:10001 hydradb-data && chmod -R 777 minio-data
+          docker compose up -d
+          for i in $(seq 1 90); do
+            if uv run python -c "
+          from friction.client import connect
+          from friction.config import Settings
+          connect(Settings.from_env(), prefer='bolt').close()
+          " 2>/dev/null; then echo "engine up after ${i}s"; exit 0; fi
+            sleep 1
+          done
+          echo "engine did not become reachable"; docker compose logs; exit 1
+      - name: The engine runs the gate — parity asserted
+        run: |
+          set +e
+          uv run friction gate --instance django__django-11551 --live
+          code=$?
+          set -e
+          # exit 1 = RUN_FULL (the product). >1 = a real failure.
+          if [ "$code" -gt 1 ]; then exit "$code"; fi
+          echo "engine executed the selection; parity=True is asserted in-command"

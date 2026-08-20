@@ -98,17 +98,25 @@ PR_FILE_PAGE = 100
 PR_FILE_CAP = 300   # beyond this the change surface is disclosed-truncated
 
 
-def _pr_files(slug: str, number: int, token: str | None) -> list[str]:
+def _pr_files(slug: str, number: int,
+              token: str | None) -> tuple[list[str], bool]:
+    """All changed paths — removed files INCLUDED (a deletion is a change;
+    its symbols will not resolve at head and the gate abstains), plus
+    whether the surface is complete (false once the pagination cap hit)."""
     out: list[str] = []
     page = 1
+    complete = True
     while len(out) < PR_FILE_CAP:
         rows = _gh(f"/repos/{slug}/pulls/{number}/files"
                    f"?per_page={PR_FILE_PAGE}&page={page}", token)
-        out += [r["filename"] for r in rows if r.get("status") != "removed"]
+        out += [r["filename"] for r in rows]
         if len(rows) < PR_FILE_PAGE:
             break
         page += 1
-    return out[:PR_FILE_CAP]
+    if len(out) > PR_FILE_CAP:
+        complete = False
+        out = out[:PR_FILE_CAP]
+    return out, complete
 
 
 def _issue_files(slug: str, number: int,
@@ -170,23 +178,45 @@ def triage(url: str, *, token: str | None = None,
     token = token or os.environ.get("GITHUB_TOKEN")
 
     # 1. the change surface first — from the API, before any cloning
+    surface_complete = True
     if kind == "pr":
-        changed = _pr_files(slug, number, token)
+        changed, surface_complete = _pr_files(slug, number, token)
         ref = f"pull/{number}/head"
-        note = "fix sites are the PR's real changed files"
+        note = ("fix sites are the PR's real changed files (removed files "
+                "included — a deletion is a change)")
     else:
         ref = _default_branch(slug, token)
         changed, note = _issue_files(slug, number, token)
 
-    # 2. nothing to measure? no clone, no graph — out of scope, honestly
-    if not changed or not any(f.endswith(".py") for f in changed):
-        why = ("no Python signal in the change surface" if changed else
-               "no fix-site candidates could be established from the issue")
+    # 2a. an issue with no named fix files is a LOCALIZATION FAILURE, not
+    # out-of-scope: the gate is blind through it. needs-human.
+    if kind == "issue" and not changed:
+        return TriageReport(
+            kind=kind, slug=slug, number=number, head="—",
+            changed=(), tier="needs-human", label=TIERS["needs-human"],
+            blurb="the issue names no fix files, so no change surface could "
+            "be established — localization failed and we do not guess; a "
+            "human triages this", gate=None,
+            localization_note="no .py paths mentioned in the issue text")
+    # 2b. a truncated change surface is insufficient evidence: needs-human,
+    # never a quiet partial measurement.
+    if not surface_complete:
+        return TriageReport(
+            kind=kind, slug=slug, number=number, head="—",
+            changed=tuple(changed), tier="needs-human",
+            label=TIERS["needs-human"],
+            blurb=f"the change surface was truncated at the {PR_FILE_CAP}-file"
+            " pagination cap — insufficient evidence to measure, a human "
+            "triages this", gate=None, localization_note=note)
+    # 2c. a PR with no Python in the surface genuinely has nothing to
+    # measure — out of scope, no clone, no graph.
+    if not any(f.endswith(".py") for f in changed):
         return TriageReport(
             kind=kind, slug=slug, number=number, head="—",
             changed=tuple(changed), tier="out-of-scope",
-            label=TIERS["out-of-scope"], blurb=why + " — the gate measures "
-            "nothing here", gate=None, localization_note=note)
+            label=TIERS["out-of-scope"],
+            blurb="no Python signal in the change surface — the gate "
+            "measures nothing here", gate=None, localization_note=note)
 
     # 3. shallow clone at the surface's commit, then the real gate
     workdir = keep or Path(tempfile.mkdtemp(prefix="friction-triage-"))
@@ -236,7 +266,9 @@ def render_markdown(r: TriageReport) -> str:
         f"- graph: {g.graph_nodes:,} nodes · {g.graph_edges:,} edges "
         f"(name-matched, `arm_a`)",
         f"- blast radius: the walk reaches **{reach}**"
-        + ("" if g.graph_complete else " · walk truncated"),
+        + ("" if g.graph_complete else " · walk truncated")
+        + " (graph symbols matching test markers — not framework-collected "
+          "node IDs)",
         f"- verdict: `{v.decision}` — exit {1 if v.decision == 'RUN_FULL' else 0}",
         "",
         "> " + v.reason,

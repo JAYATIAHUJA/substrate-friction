@@ -77,13 +77,15 @@ that the seat is worth occupying.
    wrong-element localization implicated in 53% of unresolved instances —
    cited in `docs/related-work.md`).
 
-10. **The certification seat is empty — checked, not assumed.** We
-    searched for any shipped tool that measures graph recall against
-    labelled ground truth as a gate *before* selection. The closest work
-    is the ISSTA 2024 methodology — research, Java, dynamic ground truth,
-    no product. Launchable and Develocity trust their own prediction
-    histories. Coverage tools measure execution, not map correctness.
-    Nobody ships the tripwire.
+10. **The certification seat is empty — checked, not assumed, and claimed
+    NARROWLY:** no shipped tool we found measures a static code graph's
+    recall of labelled bug-revealing tests as a gate *before* selection.
+    The closest research is the ISSTA 2024 methodology (Java, dynamic
+    ground truth, no product). Fail-closed graph-backed selection itself
+    is NOT unclaimed — keto and Seismic ship versions of it in this very
+    hackathon — and Launchable/Develocity trust their own prediction
+    histories. What is empty is the labelled-recall certification layer
+    for agent-style repo maps. That narrower seat is the one occupied.
 
 ---
 
