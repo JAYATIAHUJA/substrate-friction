@@ -1,28 +1,28 @@
-# Video shot list — narration-only session (≤2:55, hard cap 3:00)
+# Video shot list — FINAL (target 2:50–2:55, hard cap 3:00)
 
-Deterministic captures are committed under `docs/captures/` — every shot can
-be re-recorded live or screen-shown from the capture. Narration text is in
-`docs/video-script.md`; timings below match it.
+**Narration is maintained in ONE place:** `docs/video-production.md` (the
+master: shots, timings, edit plan, rubric map), with a read-aloud copy in
+`docs/video-script.md`. This table is the at-a-glance recording checklist —
+timings match both files exactly.
 
-| # | 0:00–0:35 | Shot | Source |
+| # | Time | Shot | Source |
 |---|---|---|---|
-| 1 | 0:00–0:35 | Problem: prune.png (21 edges, 9 red) | `docs/plots/prune.png` |
-| 2 | 0:35–1:10 | The corpus table: 172 instances, 0.419/0.314, RUN_FULL | capture 06 (from `docs/gate.md`) |
-| 2b | 1:10–1:27 | The longitudinal line: ceiling flat at ~0.75, 2017→today, third self-falsified hypothesis | `docs/longitudinal.md` table |
-| 3 | 1:27–1:50 | Replay: graph-complete walk, 0/370 selected | capture 02 |
-| 4 | 1:50–2:12 | LIVE: engine loads graph, 2.6 ms walk, parity=True, engine proves the miss | capture 03 |
-| 5 | 2:12–2:26 | `friction diff --live` result: anti-join in-engine, 4381/1492 EXACT | `docs/engine-diff.md` table |
-| 6 | 2:26–2:50 | HydraDB: reified meta-graph Cypher + digest pin + CI badge + negative control table | captures 04/05, README badge |
-| 7 | 2:50–2:55 | Close: "measure the graph before you trust it" | title card |
+| 0 | 0:00–0:12 | Cold open: graph-complete walk, 0/370 selected, freeze on 370 | capture 02 |
+| 1 | 0:12–0:32 | Problem: site hero → WITHOUT/WITH → verdict-flow.svg | live site |
+| 2 | 0:32–1:04 | What we built: system-diagram → **10-line bot install YAML** (README) → Origin→Now table | live site + README |
+| 3 | 1:04–1:26 | Numbers: fig-recall → fig-perrepo → fig-longitudinal (flat 8-year ceiling) | site figures |
+| 4a | 1:26–1:34 | `friction gate --arm arm_b; echo $?` — RUN_FULL, exit 1 | capture 01 |
+| 4b | 1:34–1:50 | LIVE: `--instance django__django-11551 --live` — 2.6 ms in-engine, parity=True | capture 03 |
+| 4c | 1:50–2:07 | **THE BOT**: `friction triage …fastapi/pull/13827` — human-verification, 1 of 316 tests, head-start line | capture 16 |
+| 4d | 2:07–2:16 | Agent abstains over MCP: `[agent] ABSTAIN … running the FULL suite` | capture 07 |
+| 5 | 2:16–2:35 | HydraDB: site §05 → fig-latency → diff --live parity block (4,381/1,492 EXACT) → 4 upstream links | site + docs/engine-diff.md |
+| 6 | 2:35–2:55 | Proof: negative control → `friction verify` OK → scorecard scroll → end card | captures 05/08 + docs/scorecard.md |
 
-Script deltas vs `docs/video-script.md` (recorded 2026-08-18): the headline is
-now the 172-instance corpus (0.419 type-resolved, 0.314 name-matched), the
-per-repo spread line replaces the django-only line, and shot 5 (engine diff)
-replaces the second terminal beat. All quoted numbers exist in
-`data/shipped/gate-results.json` and `docs/engine-diff.md`.
+All quoted numbers exist in `data/shipped/gate-results.json`,
+`docs/engine-diff.md`, and `docs/captures/` — except Shot 4c, where the
+numbers are the live product output on screen (capture 16 is the committed
+2026-08-20 run; if a fresh run differs because the PR moved, speak the
+numbers on YOUR screen).
 
-**Narration is now maintained in ONE place:** `docs/video-production.md`
-(plain-language cut, 453 words) with a read-aloud copy in
-`docs/video-script.md`. The longitudinal beat in that cut: "And across eight
-years of Django it never improved. Not a bug that ages out — it's how the map
-is made."
+Trim order if the cut runs hot: Origin table flash (−4 s) → fig-latency
+flash (−3 s) → shorten 4d (−4 s). Never cut 0, 4b, or 4c.
