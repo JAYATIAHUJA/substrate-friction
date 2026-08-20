@@ -38,8 +38,8 @@ allocator when a class can *pass* — the roadmap, in order:
    clears the bar.
 3. **Third oracles** — runtime coverage and mutation-based affected-test
    labels beside SWE-bench, with agreement/disagreement reported.
-4. **Executor integration** — run the selected subset for real (the keto
-   pattern), so saved wall-clock time becomes the headline metric:
+4. **Executor integration** — run the selected subset for real (the fail-closed
+   executor pattern fellow entries already ship), so saved wall-clock time becomes the headline metric:
    "X% fewer tests, zero known fault-revealing tests missed, one-sided
    95% bound."
 5. **Package split** — `graphguard-core` (parser + gate + Action, installs
