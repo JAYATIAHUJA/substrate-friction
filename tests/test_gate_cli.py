@@ -146,3 +146,17 @@ def test_gate_instance_endpoint_returns_the_dropped_tests_and_the_cypher():
 
 def test_gate_instance_endpoint_404s_on_an_unknown_instance():
     assert _client().get("/gate/nope__nope-0").status_code == 404
+
+
+def test_gate_distance_report_computes_from_the_artifact(capsys):
+    """The chances, computed: every class row, the perfect-n, and the
+    never-at-this-recall honesty for sub-bar recalls."""
+    code = main(["gate", "--distance"])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "THE DISTANCE TO AUTONOMY" in out
+    assert "type-resolved (pooled)" in out and "0.419" in out
+    assert "django · arm_b" in out
+    assert "n ≥ 52" in out                    # perfect-record unlock size
+    assert "never at this recall" in out      # sub-bar recall honesty
+    assert "matplotlib · arm_b" in out        # the 0.000 rows are shown, not hidden
