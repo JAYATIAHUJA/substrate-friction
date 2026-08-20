@@ -1,0 +1,20 @@
+## 🔺 substrate—friction triage — `human-verification`
+
+**the map class under this change has not earned autonomy (see the prior and its bound below) — keep a human in the loop and run the full verification.**
+
+- change surface: 2 file(s) — `fastapi/dependencies/utils.py` …
+- localization: fix sites are the PR's real changed files (removed files included — a deletion is a change)
+- graph: 1,247 nodes · 1,335 edges (name-matched, `arm_a`)
+- blast radius: the walk reaches **1 of 316 tests** (graph symbols matching test markers — not framework-collected node IDs)
+- verdict: `RUN_FULL` — exit 1
+
+> measured test->fix recall 0.500 on n=30 labelled instances is below the 0.95 bar: 50% of tests known to guard their fix are not reachable in this graph, so a skip would silently drop them
+>
+> Recall 0.500 is the value measured for 'arm_a'-class graphs on the labelled corpus (n=30), not a measurement on fastapi/fastapi. An unlabelled repository cannot yield a recall figure; this is that class's prior, applied. Per-repo recall spans 0.50–0.50 across 1 repo; the pooled one-sided 95% lower bound is 0.356.
+
+**tests to watch** (first 1 of 1):
+- `tests.test_union_forms::post_union_form`
+
+**review focus — the head start:** the evidence narrows a human's starting point to **1 of 316 tests (0.3% of the suite)** plus the 28 changed symbol(s). A head start, not a guarantee: at measured recall 0.50, the full suite remains the safety net — start where the graph points, finish everywhere.
+
+*Fail-closed by construction: the autonomous label requires the measured recall's one-sided 95% Wilson lower bound to clear the bar — a point estimate or a lucky small sample cannot unlock it. Numbers in this comment are emitted by `friction gate`; re-derive them with `friction verify`.*
