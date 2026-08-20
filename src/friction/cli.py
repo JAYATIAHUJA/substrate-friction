@@ -1264,7 +1264,7 @@ def _gate_live(args) -> int:
         print(tui.banner())
     mark = "PASS" if v.decision == "SKIP_SAFE" else "FAIL"
     print(tui.rule())
-    repo_label = live.repo.name if live.repo.name != "." else         live.repo.resolve().name
+    repo_label = live.repo.name or live.repo.resolve().name
     print(tui.verdict(mark, v.decision,
                       f"{repo_label}  arm={live.arm}  k={live.k}"))
     print(tui.rule())

@@ -14,7 +14,7 @@ $ friction gate --repo . --changed src/friction/gate.py
 [38;5;240mmeasure the map before you trust it[0m
 
 [38;5;240m────────────────────────────────────────────────────────────────────[0m
-[38;5;208;1m[FAIL][0m  [1mRUN_FULL[0m      [38;5;245m  arm=arm_a  k=6[0m
+[38;5;208;1m[FAIL][0m  [1mRUN_FULL[0m      [38;5;245msubstrate-friction  arm=arm_a  k=6[0m
 [38;5;240m────────────────────────────────────────────────────────────────────[0m
   graph            : 96,007 nodes, 123,985 edges
   changed symbols  : 17
