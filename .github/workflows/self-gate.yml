@@ -31,7 +31,7 @@ jobs:
 
       - name: Gate our own package (live graph build, prior stated as prior)
         run: |
-          uv run friction gate --repo src --changed friction/gate.py --json > /tmp/self.json || true
+          uv run friction gate --repo . --changed src/friction/gate.py --json > /tmp/self.json || true
           uv run python -c "
           import json
           d = json.load(open('/tmp/self.json'))

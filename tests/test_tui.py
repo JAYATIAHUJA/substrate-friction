@@ -18,6 +18,7 @@ SGR = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def _plain(monkeypatch, value="", name="FORCE_COLOR"):
+    monkeypatch.delenv("NO_COLOR", raising=False)   # host env must not leak
     monkeypatch.setenv(name, value)
 
 
@@ -43,6 +44,7 @@ def test_plain_bytes_match_history(monkeypatch):
 
 
 def test_force_color_emits_valid_sgr(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)   # hermetic: host NO_COLOR off
     _plain(monkeypatch, "1")
     assert tui.styling() is True
     whole = "\n".join([
@@ -63,6 +65,7 @@ def test_force_color_emits_valid_sgr(monkeypatch):
 
 
 def test_tokens_survive_styling(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
     _plain(monkeypatch, "1")
     v = SGR.sub("", tui.verdict("FAIL", "RUN_FULL", "arm=arm_b  k=6"))
     assert v == "[FAIL]  RUN_FULL      arm=arm_b  k=6"
@@ -77,6 +80,7 @@ def test_no_color_wins_over_force(monkeypatch):
 
 
 def test_banner_wordmark_and_uniform_rows(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
     _plain(monkeypatch, "1")
     rows = [SGR.sub("", r) for r in tui.banner().rstrip("\n").split("\n")]
     # 6 rows SUBSTRATE + 6 rows —FRICTION + tagline
@@ -91,6 +95,7 @@ def test_banner_wordmark_and_uniform_rows(monkeypatch):
 
 
 def test_banner_narrow_terminal_falls_back(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
     _plain(monkeypatch, "1")
     import friction.tui as T
     monkeypatch.setattr(T.shutil, "get_terminal_size",

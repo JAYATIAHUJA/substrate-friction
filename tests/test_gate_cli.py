@@ -160,3 +160,17 @@ def test_gate_distance_report_computes_from_the_artifact(capsys):
     assert "n ≥ 52" in out                    # perfect-record unlock size
     assert "never at this recall" in out      # sub-bar recall honesty
     assert "matplotlib · arm_b" in out        # the 0.000 rows are shown, not hidden
+
+
+def test_production_names_are_never_tests():
+    """Adversarial review caught the shipped gate calling the production
+    function `select_tests` a TEST (its name contains '_test'). Test-role
+    now comes from the module path only — regression-pinned here."""
+    from friction.live import _is_test
+    assert not _is_test("friction.gate::select_tests")
+    assert not _is_test("friction.cli::run_tests")
+    assert not _is_test("app.latest_patch::get")
+    assert _is_test("tests.test_gate::test_the_verdict")
+    assert _is_test("test_core::test_helper")            # flat layout
+    assert _is_test("src.pkg.tests.test_x::run")         # src layout
+    assert _is_test("conftest::fixture_helper")

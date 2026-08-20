@@ -45,8 +45,22 @@ class LiveGate:
 
 
 def _is_test(node: str) -> bool:
-    low = node.replace("\\", "/").lower()
-    return any(m in low for m in TEST_MARKERS)
+    """Test-role comes from the MODULE PATH, never from a symbol's name.
+
+    A symbol under tests/, in test_*.py / *_test.py, or in conftest.py is a
+    test. A production function whose NAME happens to contain 'test'
+    (select_tests, run_tests, latest_patch) is NOT — name-matching here once
+    misclassified `friction.gate::select_tests` as a test on this very repo
+    (found by adversarial review, fixed with a regression test).
+    """
+    module = node.split("::", 1)[0].rsplit(".", 1)[-1].lower()
+    segs = node.split("::", 1)[0].replace("\\", "/").lower().split("/")
+    stem = module
+    if any(seg.startswith("test_") or seg.endswith("_test")
+           or seg in ("tests", "test", "conftest") for seg in segs):
+        return True
+    return stem.startswith("test_") or stem.endswith("_test") \
+        or stem == "conftest"
 
 
 def _module_prefixes(path: str) -> tuple[str, ...]:
