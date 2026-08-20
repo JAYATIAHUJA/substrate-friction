@@ -277,6 +277,11 @@ def wilson_lb(hits: int, n: int, z: float = 1.645) -> float:
 
 def gate(audit: RecallAudit, threshold: float = SAFE_SKIP_RECALL) -> GateVerdict:
     """Turn a measured recall into a decision about skipping tests."""
+    if not 0.0 < threshold <= 1.0:
+        raise ValueError(
+            f"threshold must be in (0, 1], got {threshold}: recall is a "
+            f"proportion, so a bar outside that range can never be a "
+            f"meaningful skip criterion")
     recall = audit.recall
 
     if audit.n == 0:

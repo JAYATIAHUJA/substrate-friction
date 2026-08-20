@@ -29,6 +29,7 @@ import os
 import re
 import subprocess
 import tempfile
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, replace as _replace
 from pathlib import Path
@@ -87,8 +88,26 @@ def _gh(path: str, token: str | None = None) -> dict:
             **({"Authorization": f"Bearer {token}"} if token else {}),
         },
     )
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise ValueError(
+                f"github reports no such PR/issue: {path} (404) — check the "
+                f"URL, or set GITHUB_TOKEN if the repository is private"
+            ) from exc
+        if exc.code in (403, 429):
+            raise ValueError(
+                f"github refused the request ({exc.code}, likely a rate "
+                f"limit) — set GITHUB_TOKEN and retry"
+            ) from exc
+        raise ValueError(f"github API error {exc.code} on {path}") from exc
+    except urllib.error.URLError as exc:
+        raise ValueError(
+            f"could not reach api.github.com ({exc.reason}) — triage needs "
+            f"network access to read the PR"
+        ) from exc
 
 
 def parse_target(url: str) -> tuple[str, str, int]:

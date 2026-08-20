@@ -738,7 +738,13 @@ def cmd_triage(args) -> int:
     """
     from friction.triage import render_markdown, triage
 
-    report = triage(args.url, threshold=getattr(args, "threshold", None))
+    try:
+        report = triage(args.url, threshold=getattr(args, "threshold", None))
+    except ValueError as exc:
+        print(f"triage: {exc}", file=sys.stderr)
+        print("expected a GitHub PR or issue URL, e.g. "
+              "https://github.com/owner/repo/pull/123", file=sys.stderr)
+        return 2
     g = report.gate
     payload = {
         "kind": report.kind, "slug": report.slug,
@@ -1456,6 +1462,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "eval":
         return _print_doc(EVAL_PATH,
                           "no evaluation report yet — run `uv run python -m friction.harness`.")
+
+    if getattr(args, "threshold", None) is not None \
+            and not 0.0 < args.threshold <= 1.0:
+        print(f"friction: --threshold must be in (0, 1], got {args.threshold} "
+              f"— recall is a proportion, so a bar outside that range can "
+              f"never be a meaningful skip criterion", file=sys.stderr)
+        return 2
 
     if args.command == "gate":
         return cmd_gate(args)
