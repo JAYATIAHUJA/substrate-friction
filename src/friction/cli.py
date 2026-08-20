@@ -738,7 +738,7 @@ def cmd_triage(args) -> int:
     """
     from friction.triage import render_markdown, triage
 
-    report = triage(args.url)
+    report = triage(args.url, threshold=getattr(args, "threshold", None))
     g = report.gate
     payload = {
         "kind": report.kind, "slug": report.slug,
@@ -1272,6 +1272,10 @@ def main(argv: list[str] | None = None) -> int:
                                      "(or /issues/N)")
     tri_cmd.add_argument("--json", action="store_true",
                          help="machine-readable report")
+    tri_cmd.add_argument("--threshold", type=float, default=None,
+                         help="policy bar for this run (default: the shipped "
+                              "safety bar 0.95). Setting it is an operator "
+                              "decision, disclosed in the output.")
     tri_cmd.add_argument("--json-out", default=None, metavar="PATH",
                          help="also write the JSON report to PATH while "
                               "printing the markdown comment (the Action "

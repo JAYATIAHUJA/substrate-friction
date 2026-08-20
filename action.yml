@@ -16,6 +16,12 @@ inputs:
     description: 'The PR URL (defaults to the triggering pull_request event)'
     required: false
     default: ''
+  threshold:
+    description: >-
+      Policy bar for this repo (default: the shipped safety bar 0.95).
+      Setting it is an operator decision, disclosed in every comment.
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -37,8 +43,10 @@ runs:
         # exit 1 is the product (a human stays in the loop). Anything above
         # 1 is a real crash and MUST fail the workflow.
         set +e
+        THR=""
+        if [ -n "${{ inputs.threshold }}" ]; then THR="--threshold ${{ inputs.threshold }}"; fi
         uvx --from "git+https://github.com/areycruzer/substrate-friction@bb27220506bd83f5864ff4b835c02999108acd16" \
-          friction triage "$PR_URL" --json-out triage.json > comment.md
+          friction triage "$PR_URL" $THR --json-out triage.json > comment.md
         code=$?
         set -e
         cat comment.md
