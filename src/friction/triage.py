@@ -14,6 +14,9 @@ fail-closed at every seam:
 
 Every number in the rendered output comes from the gate itself.
 
+Demo note: this line exists so the demo PR carries a Python change —
+the policy-bar run needs a gateable surface to measure.
+
 Dogfood: this module triages its own repository's PRs via
 .github/workflows/triage.yml — the PR that added this line was itself
 labeled and commented by that workflow.
