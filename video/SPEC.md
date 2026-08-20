@@ -115,3 +115,23 @@ Every on-screen number is a shipped, verify-asserted figure: 0.545/24-44,
 2.6 ms, parity/DROPPED (capture 03), 1 of 316 (capture 16), digest prefix.
 No invented data anywhere — "fake realistic data" is NOT used; the real
 product's real numbers are the demo data.
+
+## 6. Audio (added)
+
+All sound is **synthesized from scratch** (pure sine/noise synthesis, no
+samples, no downloads — zero licensing exposure; generator committed in git
+history, output WAVs in `public/audio/`):
+
+- `music.wav` — the 48 s bed: A1 drone + soft 96 BPM eighth-note pulse;
+  an energy lift (airy hats + added fifth) enters exactly at the hard cut
+  (19.2 s / frame 576); fade-in 1.2 s, fade-out from 45.5 s. Volume 0.55.
+- Cues (frame-accurate, see `src/Sfx.tsx` CUES map): typing roll
+  (104–146, every 3 fr, deterministic velocity variation) · Enter thock
+  (150) · panel rises (92/216) · verdict stamp (330) · APPROVE click
+  (516) · merge-blocked stamp (526) · **hard-cut boom (576)** · whip-pan
+  whooshes (700/850/1000/1256/1288) · engine tick (746) · parity stamp +
+  chime (876/879) · DROPPED stamp (898) · step ticks
+  (1005/1055/1105/1155) · VERIFY stamp + chime (1300/1303) · endcard
+  rise + brand note (1320/1338).
+- Mix discipline: music never exceeds 0.55; every spike-cue sits on a
+  motion event that already exists on screen — no sound without a visual.

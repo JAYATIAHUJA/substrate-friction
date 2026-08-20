@@ -6,6 +6,7 @@ import { Act1 } from "./Act1";
 import { Act2 } from "./Act2";
 import { Act3 } from "./Act3";
 import { Act4 } from "./Act4";
+import { Sfx } from "./Sfx";
 
 loadVT323();
 loadJetBrainsMono();
@@ -23,6 +24,7 @@ const DISCLAIMER =
 export const Demo: React.FC = () => {
   return (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
+      <Sfx />
       <Sequence name="Act 1 — The Ask" from={ACT1_FROM} durationInFrames={216}>
         <Act1 />
       </Sequence>
