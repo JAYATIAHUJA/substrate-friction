@@ -13,6 +13,10 @@ fail-closed at every seam:
   a wrong prediction can over-route to a human, never grant autonomy.
 
 Every number in the rendered output comes from the gate itself.
+
+Dogfood: this module triages its own repository's PRs via
+.github/workflows/triage.yml — the PR that added this line was itself
+labeled and commented by that workflow.
 """
 
 from __future__ import annotations
