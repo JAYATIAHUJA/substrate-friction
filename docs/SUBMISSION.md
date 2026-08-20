@@ -57,6 +57,12 @@ fail-closed tripwire that does, against human-verified ground truth.
 
 ## (b) Links
 
+**Triage in action (live evidence):** [PR #1](https://github.com/areycruzer/substrate-friction/pull/1) —
+the GitHub Action (any repo: 10 lines of YAML) labeled and commented its own PR:
+`triage/human-verification`, the repo's real graph (1,175 nodes), blast radius
+7 of 642 tests, the triage tests themselves as tests-to-watch. Workflow:
+`.github/workflows/triage.yml`; composite action: `action.yml`.
+
 - Repo: https://github.com/areycruzer/substrate-friction
 - Site: https://areycruzer.github.io/substrate-friction
 - Video: **[PLACEHOLDER — add the final URL before submitting]**
