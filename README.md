@@ -547,3 +547,4 @@ Four contributions to `github.com/hydra-db/hydradb`, surfaced by this project:
 ## License
 
 This project is **MIT** (see `LICENSE`). The HydraDB engine it queries is **AGPL-3.0** and is used as a pinned external service, not vendored into this source tree; its license governs the engine binary independently of this project's MIT grant.
+<!-- verified: the pinned action ran on this PR -->
