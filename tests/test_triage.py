@@ -228,3 +228,32 @@ def test_issue_without_named_files_is_needs_human(monkeypatch):
     r = tri.triage("https://github.com/o/r/issues/3")
     assert r.tier == "needs-human"
     assert "do not guess" in r.blurb
+
+
+def test_policy_bar_opens_the_gate_and_discloses_itself(tmp_path, monkeypatch):
+    """A repo owner's POLICY bar (0.30) lets the real evidence (arm-A class
+    LB 0.351) clear — the tier flips to ai-autonomy AND the comment loudly
+    discloses that a non-default bar was used. At the default 0.95 the same
+    evidence refuses (the sibling test above)."""
+    mini = _mini_repo(tmp_path)
+
+    def fake_gh(path, token=None):
+        if "/files" in path:
+            return [{"filename": "core.py", "status": "modified"}]
+        raise AssertionError(path)
+
+    def fake_clone(slug, dest, pr_number=None, branch=None):
+        for f in mini.iterdir():
+            (dest / f.name).write_text(f.read_text(), encoding="utf-8")
+
+    monkeypatch.setattr(T, "_gh", fake_gh)
+    monkeypatch.setattr(T, "_shallow_clone", fake_clone)
+
+    r_default = T.triage("https://github.com/o/r/pull/7")
+    assert r_default.tier == "human-verification"   # default bar refuses
+
+    r_policy = T.triage("https://github.com/o/r/pull/7", threshold=0.30)
+    assert r_policy.tier == "ai-autonomy"           # policy bar opens it
+    assert r_policy.gate.verdict.decision == "SKIP_SAFE"
+    md = render_markdown(r_policy)
+    assert "policy bar" in md and "0.30" in md and "0.95" in md

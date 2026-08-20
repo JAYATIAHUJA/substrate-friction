@@ -30,6 +30,7 @@ import urllib.request
 from dataclasses import dataclass, replace as _replace
 from pathlib import Path
 
+from friction.gate import SAFE_SKIP_RECALL
 from friction.live import LiveGate, gate_repo
 
 TIERS = {
@@ -69,6 +70,7 @@ class TriageReport:
     blurb: str
     gate: LiveGate | None
     localization_note: str    # provenance of fix-site prediction (issues)
+    threshold: float | None = None   # policy bar if the operator set one
 
 
 def _gh(path: str, token: str | None = None) -> dict:
@@ -173,7 +175,8 @@ def classify(gate: LiveGate, changed: list[str]) -> str:
 
 
 def triage(url: str, *, token: str | None = None,
-           keep: Path | None = None) -> TriageReport:
+           keep: Path | None = None,
+           threshold: float | None = None) -> TriageReport:
     slug, kind, number = parse_target(url)
     token = token or os.environ.get("GITHUB_TOKEN")
 
@@ -197,7 +200,8 @@ def triage(url: str, *, token: str | None = None,
             blurb="the issue names no fix files, so no change surface could "
             "be established — localization failed and we do not guess; a "
             "human triages this", gate=None,
-            localization_note="no .py paths mentioned in the issue text")
+            localization_note="no .py paths mentioned in the issue text",
+            threshold=threshold)
     # 2b. a truncated change surface is insufficient evidence: needs-human,
     # never a quiet partial measurement.
     if not surface_complete:
@@ -225,7 +229,7 @@ def triage(url: str, *, token: str | None = None,
     else:
         _shallow_clone(slug, workdir, branch=ref)
 
-    gate = gate_repo(workdir, changed)
+    gate = gate_repo(workdir, changed, threshold=threshold)
     # the prior note names the clone dir; name the real repo instead
     gate = _replace(gate, prior_note=gate.prior_note.replace(
         gate.repo.name, slug))
@@ -234,7 +238,8 @@ def triage(url: str, *, token: str | None = None,
     return TriageReport(
         kind=kind, slug=slug, number=number,
         head=ref, changed=tuple(changed), tier=tier, label=TIERS[tier],
-        blurb=TIER_BLURB[tier], gate=gate, localization_note=note)
+        blurb=TIER_BLURB[tier], gate=gate, localization_note=note,
+        threshold=threshold)
 
 
 def render_markdown(r: TriageReport) -> str:
@@ -279,6 +284,15 @@ def render_markdown(r: TriageReport) -> str:
         shown = "\n".join(f"- `{t}`" for t in g.selected_tests[:5])
         lines += ["", f"**tests to watch** (first {min(5, sel)} of "
                   f"{sel:,}):", shown]
+    if r.threshold is not None and r.threshold != SAFE_SKIP_RECALL:
+        lines += [
+            "",
+            f"⚠️ **policy bar:** this run used an operator-set bar of "
+            f"**{r.threshold:.2f}**, not the default safety bar of "
+            f"{SAFE_SKIP_RECALL:.2f}. The evidence cleared the *policy* bar; "
+            f"at the default bar this same evidence would refuse. The bar is "
+            f"policy — the evidence is statistical.",
+        ]
     lines += [
         "",
         "*Fail-closed by construction: the autonomous label requires the "

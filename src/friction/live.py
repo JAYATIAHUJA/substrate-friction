@@ -69,7 +69,7 @@ def _module_prefixes(path: str) -> tuple[str, ...]:
 
 
 def gate_repo(repo: Path, changed_files: list[str], arm: str = "arm_a",
-              k: int = 6) -> LiveGate:
+              k: int = 6, threshold: float | None = None) -> LiveGate:
     """Build a graph of `repo`, select tests for `changed_files`, and decide."""
     repo = Path(repo)
     if not repo.is_dir():
@@ -128,7 +128,9 @@ def gate_repo(repo: Path, changed_files: list[str], arm: str = "arm_a",
     # Recall is a corpus prior, never a measurement on this repo.
     from friction.cli import MANIFEST_PATH
     audit = audit_recall(MANIFEST_PATH, MANIFEST_PATH.parent, arm, k)
-    verdict = gate(audit)
+    from friction.gate import SAFE_SKIP_RECALL
+    verdict = gate(audit, threshold if threshold is not None
+                   else SAFE_SKIP_RECALL)
     live_note = None
     if changed_ids and len(matched) < len(wanted):
         live_note = (f"{len(wanted) - len(matched)} changed file(s) matched no "
