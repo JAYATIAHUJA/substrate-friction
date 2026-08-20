@@ -45,7 +45,7 @@ runs:
         set +e
         THR=""
         if [ -n "${{ inputs.threshold }}" ]; then THR="--threshold ${{ inputs.threshold }}"; fi
-        uvx --from "git+https://github.com/areycruzer/substrate-friction@bb27220506bd83f5864ff4b835c02999108acd16" \
+        uvx --from "git+https://github.com/areycruzer/substrate-friction@603f68e00aaf98a074f091eba088b0a42f505ce0" \
           friction triage "$PR_URL" $THR --json-out triage.json > comment.md
         code=$?
         set -e
