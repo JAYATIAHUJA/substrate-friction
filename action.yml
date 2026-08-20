@@ -86,7 +86,7 @@ runs:
         new_label=$(jq -r .label triage.json)
         n="${pr##*/}"
         # remove any triage/* label that is not the new one
-        for l in $(gh pr view "$n" --json labels --jq '.[].name' | grep '^triage/' || true); do
+        for l in $(gh pr view "$n" --json labels --jq '.labels[].name' | grep '^triage/' || true); do
           if [ "$l" != "$new_label" ]; then gh pr edit "$n" --remove-label "$l"; fi
         done
         gh pr edit "$n" --add-label "$new_label"

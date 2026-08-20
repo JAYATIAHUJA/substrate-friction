@@ -57,6 +57,14 @@ fail-closed tripwire that does, against human-verified ground truth.
 
 ## (b) Links
 
+**The unlock, exhibited on a real PR:** [PR #4](https://github.com/areycruzer/substrate-friction/pull/4) —
+labeled `triage/ai-autonomy` under a disclosed operator policy bar of 0.30
+(the repo's policy file, since restored to the default 0.95): `SKIP_SAFE`,
+exit 0, with the loud "policy bar ≠ default" disclosure. Same evidence at the
+default bar refuses, as PRs #1–#3 show. The full ladder is live across four
+PRs: human-verification (#1), out-of-scope (#2, #3), needs-human (#4's first
+run — blindness beat the policy bar), ai-autonomy (#4's final run).
+
 **Triage in action (live evidence):** [PR #1](https://github.com/areycruzer/substrate-friction/pull/1) —
 the GitHub Action (any repo: 10 lines of YAML) labeled and commented its own PR:
 `triage/human-verification`, the repo's real graph (1,175 nodes), blast radius
