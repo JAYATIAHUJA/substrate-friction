@@ -1,0 +1,5 @@
+# substrate-friction repo policy — maintainer-set, disclosed in every comment.
+# DEMO: this bar is set to 0.30 to exhibit the policy unlock (PR #4/#5).
+# The default safety bar is 0.95; see docs/objections.md (the bar is policy,
+# the evidence is statistical).
+threshold: 0.30

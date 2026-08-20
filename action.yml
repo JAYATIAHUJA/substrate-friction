@@ -44,7 +44,16 @@ runs:
         # 1 is a real crash and MUST fail the workflow.
         set +e
         THR=""
-        if [ -n "${{ inputs.threshold }}" ]; then THR="--threshold ${{ inputs.threshold }}"; fi
+        if [ -n "${{ inputs.threshold }}" ]; then
+          THR="--threshold ${{ inputs.threshold }}"
+        else
+          # repo-level policy file (maintainer config, not PR surface):
+          # .github/friction-policy.yml — e.g. `threshold: 0.30`
+          POL=$(gh api "repos/$GITHUB_REPOSITORY/contents/.github/friction-policy.yml" \
+                 --jq .content 2>/dev/null | base64 -d 2>/dev/null \
+                 | sed -n 's/^threshold:[[:space:]]*//p' | tr -d '"' || true)
+          if [ -n "$POL" ]; then THR="--threshold $POL"; fi
+        fi
         uvx --from "git+https://github.com/areycruzer/substrate-friction@603f68e00aaf98a074f091eba088b0a42f505ce0" \
           friction triage "$PR_URL" $THR --json-out triage.json > comment.md
         code=$?
