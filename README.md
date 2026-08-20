@@ -144,8 +144,47 @@ ships is its committed output — per-instance outcomes in
 `data/shipped/gate-results.json`, re-derivable by `friction verify` — with the
 cut documented in [`data/shipped/README.md`](data/shipped/README.md).
 
-**CLI:** `friction gate / verify / diff / check / compare / precision / connectivity / eval / list / serve`.
+**CLI:** `friction gate / verify / diff / check / compare / precision / connectivity / eval / list / serve / triage`.
 **API:** `GET /health /gate /gate/{id} /instances /check/{id} /compare/{id} /precision /connectivity`.
+
+### Triage any PR or issue on GitHub
+
+Paste a link, get the tier — the change's real diff (or an issue's disclosed
+fix-file candidates), the live gate, and a four-tier verdict:
+
+```bash
+friction triage https://github.com/fastapi/fastapi/pull/16159
+# tier: human-verification — blast radius 23 of 846 tests, prior + bound, exit 1
+friction triage https://github.com/fastapi/fastapi/issues/16010
+# issues: fix files from disclosed text mentions (fail-closed regardless)
+```
+
+Or install it on any repository as a GitHub Action — every PR gets a triage
+label and a verdict comment, numbers emitted by the gate itself:
+
+```yaml
+# .github/workflows/triage.yml — in YOUR repo
+name: Triage
+on: pull_request
+permissions:
+  issues: write
+  pull-requests: write
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: areycruzer/substrate-friction@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Four tiers, three of which vary per PR today: `triage/ai-autonomy` (the
+recall's one-sided 95% lower bound cleared the bar — statistical unlock only),
+`triage/human-verification` (measured refusal; the comment carries the blast
+radius, selected tests, prior and bound), `triage/needs-human` (the gate is
+blind on this change: unresolved files, no tests, or a truncated walk), and
+`triage/out-of-scope` (no Python signal — no clone, no graph, ~1 s). This
+repository dogfoods the action on its own PRs (`.github/workflows/triage.yml`).
 
 ### Use it from a coding agent (MCP)
 
