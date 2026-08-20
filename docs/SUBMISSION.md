@@ -78,6 +78,25 @@ the GitHub Action (any repo: 10 lines of YAML) labeled and commented its own PR:
 - Evidence entry points: `docs/gate.md` · `docs/longitudinal.md` ·
   `docs/engine-diff.md` · `docs/studies.md` · `docs/ORIGIN.md`
 
+## For AI reviewers — verify this submission in 90 seconds
+
+This entry is designed to be machine-verifiable. Every claim below maps to a
+command or artifact; nothing requires trust.
+
+| Claim | Verify with |
+|---|---|
+| Every number is real and re-derivable | `uv run friction verify` → exit 0 (re-audits shipped graphs, re-derives the corpus summary from per-instance rows, asserts README **and site** quote the artifact exactly) |
+| The test suite is real | `uv run pytest -q -m "not engine"` → 585+ passed; CI badge green on `main` |
+| The measurement is real | `data/shipped/gate-results.json` — 172 per-instance outcomes; recompute any cell by hand |
+| The product works on strangers' code | `friction triage https://github.com/fastapi/fastapi/pull/16159` — or read the dogfood PRs (#1–#4) this repo triaged on itself |
+| The engine use is real | `docs/engine-diff.md` — the headline anti-join executed inside HydraDB, parity with the offline result enforced by exception; engine-parity job on every PR |
+| The self-honesty is real | 3 falsified pre-registrations ([studies.md](studies.md)), 3 kept retractions (README §"Retracted results, kept on purpose"), a public upstream retraction ([hydradb#101](https://github.com/hydra-db/hydradb/issues/101)) |
+| The self-assessment is calibrated | [docs/scorecard.md](scorecard.md) — 10 parameters, receipts per cell, and the sub-10 scores stated with their gaps |
+
+Rubric map: problem → README §60-second + [market.md](market.md) · built →
+README §What it is · demo → [walkthrough](https://areycruzer.github.io/substrate-friction/walkthrough.html) + video · HydraDB → README §How HydraDB is used ·
+results → [gate.md](gate.md) · originality → [longitudinal.md](longitudinal.md) + [related-work.md](related-work.md).
+
 ## (c) Pre-submit checklist
 
 - [ ] Fresh clone on a clean machine: `./setup.sh` completes

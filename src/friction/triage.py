@@ -56,8 +56,10 @@ TIER_BLURB = {
         "neighbourhood (unmatched files, no recognised tests, or a "
         "truncated walk) — a human must verify",
     "out-of-scope":
-        "no Python signal in the change surface (docs/config/other "
-        "languages) — the gate measures nothing here",
+        "no Python change surface (docs/config/other languages) — "
+        "test-selection risk does not apply to this change, so the gate has "
+        "no objection to automated handling on THAT axis (content review is "
+        "a separate question it does not measure)",
 }
 
 
@@ -285,8 +287,20 @@ def render_markdown(r: TriageReport) -> str:
     ]
     if sel and g.selected_tests:
         shown = "\n".join(f"- `{t}`" for t in g.selected_tests[:5])
+        pct = 100.0 * sel / g.total_tests if g.total_tests else 0.0
         lines += ["", f"**tests to watch** (first {min(5, sel)} of "
                   f"{sel:,}):", shown]
+        if v.decision == "RUN_FULL" and g.total_tests:
+            lines += [
+                "",
+                f"**review focus — the head start:** the evidence narrows a "
+                f"human's starting point to **{sel:,} of {g.total_tests:,} "
+                f"tests ({pct:.1f}% of the suite)** plus the "
+                f"{g.changed_symbols:,} changed symbol(s). A head start, not "
+                f"a guarantee: at measured recall "
+                f"{v.measured_recall:.2f}, the full suite remains the safety "
+                f"net — start where the graph points, finish everywhere.",
+            ]
     if r.threshold is not None and r.threshold != SAFE_SKIP_RECALL:
         lines += [
             "",

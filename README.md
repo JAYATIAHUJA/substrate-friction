@@ -74,9 +74,34 @@ It plugs in three places, all built and working:
 3. **Your terminal** — point it at any repo:
    `friction gate --repo . --changed <file>`.
 
+**Install the bot in any repo — two minutes, ten lines.** Every PR gets a
+triage label (`triage/human-verification` · `triage/needs-human` ·
+`triage/out-of-scope` · `triage/ai-autonomy`) and a comment with the
+evidence — including the **review focus**: which handful of tests the graph's
+evidence points at, so the human head-starts instead of starting cold.
+
+```yaml
+# .github/workflows/triage.yml
+name: Triage
+on: {pull_request: {types: [opened, synchronize, reopened]}}
+permissions: {issues: write, pull-requests: write, contents: read}
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: areycruzer/substrate-friction@main
+```
+
+Optional `.github/friction-policy.yml` sets your own bar (`threshold: 0.95`
+is the shipped default; a non-default bar is loudly disclosed in every
+comment). Live proof: this repo triages [its own pull requests](https://github.com/areycruzer/substrate-friction/pulls?q=is%3Apr).
+
 Everything below is the deep version — how the map was measured, in a graph
 database, with every number re-checkable by one command. The presenter's
-plain-language cheat-sheet is [`docs/MINDMAP.md`](docs/MINDMAP.md). The
+plain-language cheat-sheet is [`docs/MINDMAP.md`](docs/MINDMAP.md); the
+honest 10-parameter self-assessment, receipts included, is
+[`docs/scorecard.md`](docs/scorecard.md). The
 problem itself is not our claim: ten independent, citable facts — an
 acquired ML-test-skipping industry, measured CI-cost pressure, documented
 agent short-cutting, and an empty certification seat — are collected in
